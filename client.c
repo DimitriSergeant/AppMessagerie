@@ -29,8 +29,8 @@ int main( int argc, char**argv )
 	int port, i,envoiEnCours=0,etat=0;
 	char *tampon = (char *)malloc(MAXLEN*sizeof(char));
 	char *pseudo = (char *)malloc(MAXLEN*sizeof(char));
-  char *serveur = (char *)malloc(MAXLEN*sizeof(char));
-  char *nomDest;
+	char *serveur = (char *)malloc(MAXLEN*sizeof(char));
+	char *nomDest;
 
 	/* Creation de variables pour la liste des sockets a écouter */
 	int ndfs;
@@ -49,35 +49,35 @@ int main( int argc, char**argv )
 	port = atoi(argv[2]);
 
   /* On recupere l'adresse du serveur et on met à jours les informations de la socket (adresse à joindre, port destinataire et type de socket) */
-  serveur = argv[1];
+	serveur = argv[1];
 
 
   /* serveur est le nom (ou l'adresse IP) auquel le client va acceder */
 	/* service le numero de port sur le serveur correspondant au  */
 	/* service desire par le client */
 
-  printf("Connexion au serveur %s via le port %d -\n", adr_serveur, port);
+	printf("Connexion au serveur %s via le port %d -\n", adr_serveur, port);
 
 	client_appli(serveur, port, pseudo);
 }
 
 
 int connection(char *serveur,char *service,char *protocole){
-  struct sockaddr_in *adr_serveur;
-  int r;
+	struct sockaddr_in *adr_serveur;
+	int r;
 
 	adr_serveur = (struct sockaddr_in *) malloc (sizeof(struct sockaddr_in));
   //  bzero( (void *)sock_serveur, sizeof *sock_serveur );
 	adr_serveur->sin_family = AF_INET;
-  adr_serveur.sin_port = htons(port);
-  adr_server.sin_addr.s_addr = inet_addr( serveur );
+	adr_serveur.sin_port = htons(port);
+	adr_server.sin_addr.s_addr = inet_addr( serveur );
 
   /* on créé la socket */
 	int num_socket = socket(AF_INET,SOCK_STREAM,0);
 
 	adr_socket(service, NULL, SOCK_STREAM, &adr_serveur);
 
-  if( sonadr.sin_addr.s_addr != -1 ){
+	if( sonadr.sin_addr.s_addr != -1 ){
 		/* On se connecte au serveur */
 		r = connect(num_socket, adr_serveur );
     //connect(num_socket,(struct sockaddr *)&sonadr, sizeof(sonadr));
