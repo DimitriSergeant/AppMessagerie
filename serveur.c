@@ -1,3 +1,16 @@
+/******************************************************************************/
+/*							Application: Messagerie	multi-utilisateurs										*/
+/******************************************************************************/
+/*									      																										*/
+/*			 									programme  SERVEUR			      											*/
+/*									      																										*/
+/******************************************************************************/
+/*									      																										*/
+/*		Auteurs : Dimitri SERGEANT , Léo VALETTE											 					*/
+/*									      																										*/
+/******************************************************************************/
+
+
 /* serveur.c
  * Serveur de chat:
  *  .gestion des connexions
@@ -57,9 +70,9 @@ int socket_serv = socket(PF_INET, SOCK_STREAM, 0);
 
 
 //Mise à jour des informations de la socket
-adr_serveur.sin_family = AF_INET;
-adr_serveur.sin_port = htons(port);
-adr_serveur.sin_addr.s_addr = INADDR_ANY;
+adr_serveur->sin_family = AF_INET;
+adr_serveur->sin_port = htons(port);
+adr_serveur->sin_addr.s_addr = INADDR_ANY;
 
 //Cette option permet de réutiliser l'adresse
 setsockopt(socket_serv, SOL_SOCKET, SO_REUSEADDR,(char *) &opt, sizeof(opt));

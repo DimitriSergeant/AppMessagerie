@@ -1,6 +1,20 @@
+/******************************************************************************/
+/*							Application: Messagerie	multi-utilisateurs										*/
+/******************************************************************************/
+/*									      																										*/
+/*			 									programme  CLIENT				      											*/
+/*									      																										*/
+/******************************************************************************/
+/*									      																										*/
+/*		Auteurs : Dimitri SERGEANT , Léo VALETTE											 					*/
+/*									      																										*/
+/******************************************************************************/
+
+
 /* client.c
  * Arguments : nom du serveur, port, pseudo du client
 */
+
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,10 +25,13 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/signal.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
-#include <signal.h>
+//#include <signal.h>
 
 #define MAXLEN 1024
 
@@ -23,7 +40,7 @@
 #define BIENVENUE "Connexion etablie\n"
 
 #define FIN "Fin connexion"
-#define L_FIN strlen(FIN)
+#define T_FIN strlen(FIN)
 
 #define PSEUDO "/pseudo"
 #define T_PSEUDO strlen(PSEUDO)
@@ -45,6 +62,14 @@
 
 #define ETAT_ENTRER_NOUVEAU_NOM 1
 #define ETAT_INDIFFERENT 0
+
+
+void client_appli (char *serveur, int port, char *pseudo);
+
+
+/**********************************************************/
+/*--------------- programme client -----------------------*/
+
 
 int main( int argc, char**argv )
 {
@@ -70,16 +95,17 @@ int main( int argc, char**argv )
 
 
   /* serveur est le nom (ou l'adresse IP) auquel le client va acceder */
-	/* service le numero de port sur le serveur correspondant au  */
+	/* port le numero de port sur le serveur correspondant au  */
 	/* service desire par le client */
 
-	printf("Connexion au serveur %s via le port %d -\n", adr_serveur, port);
+	printf("Connexion au serveur %s via le port %d -\n", serveur, port);
 
 	client_appli(serveur, port, pseudo);
 }
 
 
-int connexion(char *serveur,char *service,char *protocole){
+// établie la connexion au serveur via le protocole et le port donné
+int connexion(char *serveur, int port, char *protocole){
   struct sockaddr_in *adr_serveur;
   int res;
 
@@ -92,11 +118,11 @@ int connexion(char *serveur,char *service,char *protocole){
   /* on créé la socket */
 	int num_socket = socket(AF_INET,SOCK_STREAM,0);
 
-	adr_socket(service, NULL, SOCK_STREAM, &adr_serveur);
+	/////////////////adr_socket(port, NULL, SOCK_STREAM, &adr_serveur);
 
   if( adr_serveur->sin_addr.s_addr != -1 ){
 		/* On se connecte au serveur */
-		res = connect(num_socket, adr_serveur );
+		res = connect(num_socket, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur) );
     //connect(num_socket,(struct sockaddr *)&sonadr, sizeof(sonadr));
 	}else {
 		/* Le serveur est designe par son nom, il faut
@@ -113,15 +139,15 @@ int connexion(char *serveur,char *service,char *protocole){
 			     case TRY_AGAIN: fprintf(stderr, "Serveur de noms indisponible, reessayez plus tard :"); break;
 			}
 		}else{
-			for( i=0, res=-1; (res==-1) && (host->h_addr_list[i] != NULL ) ; i++) {
+			for(int i=0, res=-1; (res==-1) && (host->h_addr_list[i] != NULL ) ; i++) {
 				/* On essaie de se connecter au serveurs trouvés par la requête DNS */
-				bcopy( (char *) host->h_addr_list[i], (char *)&(adr_serveur.sin_addr), sizeof(adr_serveur.sin_addr) );
-				res = connect(num_socket, (struct sockaddr *)&adr_serveur, sizeof(adr_serveur));
+				bcopy( (char *) host->h_addr_list[i], (char *)&(adr_serveur->sin_addr), sizeof(adr_serveur->sin_addr) );
+				res = connect(num_socket, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur) );
 			}
 		}
   }
   if( res != 0 ) {
-    fprintf(stderr, "Service distant [port %s] inaccessible sur le serveur %s \n ", argv[2], argv[1] );
+    fprintf(stderr, "Service distant [port %d] inaccessible sur le serveur %s \n ", port, serveur );
     return -1;
   }
 
@@ -130,23 +156,25 @@ int connexion(char *serveur,char *service,char *protocole){
 
 
 
+
 /*****************************************************************************/
-void client_appli (char *serveur,char *port, char *pseudo){
+void client_appli (char *serveur, int port, char *pseudo){
 
   char *protocole = PROTOCOLE_DEFAUT; /* protocole par defaut */
   char *message = (char *)malloc(MAXLEN*sizeof(char));
+	char *buf = (char *)malloc(MAXLEN*sizeof(char));
 	char *nomDest;
 
 	/* Creation de variables pour la liste des sockets a écouter */
-	int ndfs, i, envoiEnCours=0, etat=0;
+	int ndfs, envoiEnCours=0, etat=0;
 	fd_set liste, liste2;
 
 
-  int num_socket = connexion(serveur,service,protocole);
+  int num_socket = connexion(serveur, port, protocole);
 
   /* On envoie le pseudo du client au serveur */
 	strcpy(message,"pseudo : ");
-	strcat(message,nom);
+	strcat(message,pseudo);
 	write(num_socket, message, strlen(message)+1 );
 
 	/* On attend le message de bienvenue */
@@ -159,7 +187,7 @@ void client_appli (char *serveur,char *port, char *pseudo){
 
 	/* La socket 0 correspond a une saisie clavier validee par Enter */
 	FD_SET(0, &liste);
-	FD_SET(num_ocket, &liste);
+	FD_SET(num_socket, &liste);
 
 
 	while( 1 ) {
@@ -192,10 +220,10 @@ void client_appli (char *serveur,char *port, char *pseudo){
 				/* Si l'utilisateur veut se deconnecter */
 				else if( !strncmp(buf, FIN, T_FIN) ){
 					/* demande de fin de connexion */
-					sprintf(buf, "Deconnexion de %s \n",nom);
+					sprintf(buf, "Deconnexion de %s \n",pseudo);
 					write( num_socket, buf, strlen(buf)+1 );
 					close(num_socket);
-					return 0;
+					return ;
 				}
 				/* Si l'utilisateur demande la liste des cients présents */
 				else if( !strncmp(buf, LISTE, T_LISTE) ){
@@ -211,7 +239,7 @@ void client_appli (char *serveur,char *port, char *pseudo){
 					strcpy(message,NOMDEST);
 
 					char *nbr=(char *)malloc(sizeof(char)) ;
-					sprintf(nbr,"%d",strlen(nomDest)-1);
+					sprintf(nbr,"%d",(int)strlen(nomDest)-1);
 					strcat(message,nbr);
 					strcat(message," ");
 					strncat(message,nomDest,strlen(nomDest)-1);
