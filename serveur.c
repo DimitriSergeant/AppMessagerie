@@ -23,13 +23,28 @@
 #define MAX_CONNECTIONS 5
 #define PORT 1234
 
+#define BIENVENUE "Connexion etablie\n"
+#define FIN "Fin connexion"
+
+#define LISTE "liste"
+#define T_LISTE strlen(LISTE)
+
+#define NOM "nom : "
+#define T_NOM strlen(NOM)
+
+#define NOMDEST "nomdest "
+#define T_NOMDEST strlen(NOMDEST)
+
+#define UTILISATEUR_EXISTANT "Utilisateur existant\n"
+#define T_UTILISATEUR_EXISTANT strlen(UTILISATEUR_EXISTANT)
+
 struct sockaddr_in *adr_serveur, *adr_client;
 
 
 int opt = 1, port;
 
 //Nombre de clients actuellement connectés
-int nbClient; 
+int nbClient;
 
 //Liste des clients connectés
 char * listeNom[MAX_CLIENTS];

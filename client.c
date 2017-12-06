@@ -22,21 +22,36 @@
 
 #define BIENVENUE "Connexion etablie\n"
 
-#define FIN "quit"
+#define FIN "Fin connexion"
 #define L_FIN strlen(FIN)
 
+#define PSEUDO "/pseudo"
+#define T_PSEUDO strlen(PSEUDO)
+
+#define LISTE "liste"
+#define T_LISTE strlen(LISTE)
+
+#define ENVOI "envoi "
+#define T_ENVOI strlen(ENVOI)
+
+#define LISTERETOUR "Liste des connectés :\n"
+#define T_LISTERETOUR strlen(LISTERETOUR)
+
+#define NOMDEST "nomdest "
+#define T_NOMDEST strlen(NOMDEST)
+
+#define UTILISATEUR_EXISTANT "Utilisateur existant\n"
+#define T_UTILISATEUR_EXISTANT strlen(UTILISATEUR_EXISTANT)
+
+#define ETAT_ENTRER_NOUVEAU_NOM 1
+#define ETAT_INDIFFERENT 0
 
 int main( int argc, char**argv )
 {
 	/* Definition de variables pour le programme */
-	int port, i,envoiEnCours=0,etat=0;
+	int port;
 	char *pseudo = (char *)malloc(MAXLEN*sizeof(char));
 	char *serveur = (char *)malloc(MAXLEN*sizeof(char));
-	char *nomDest;
-
-	/* Creation de variables pour la liste des sockets a écouter */
-	int ndfs;
-	fd_set liste, listeAutre;
 
 	/* On vérifie que l'appel au programme est bien fait */
 	if( argc != 4) {
@@ -64,7 +79,7 @@ int main( int argc, char**argv )
 }
 
 
-int connection(char *serveur,char *service,char *protocole){
+int connexion(char *serveur,char *service,char *protocole){
   struct sockaddr_in *adr_serveur;
   int res;
 
@@ -120,14 +135,126 @@ void client_appli (char *serveur,char *port, char *pseudo){
 
   char *protocole = PROTOCOLE_DEFAUT; /* protocole par defaut */
   char *message = (char *)malloc(MAXLEN*sizeof(char));
+	char *nomDest;
 
-  int num_socket = connection(serveur,service,protocole);
+	/* Creation de variables pour la liste des sockets a écouter */
+	int ndfs, i, envoiEnCours=0, etat=0;
+	fd_set liste, liste2;
+
+
+  int num_socket = connexion(serveur,service,protocole);
 
   /* On envoie le pseudo du client au serveur */
 	strcpy(message,"pseudo : ");
 	strcat(message,nom);
 	write(num_socket, message, strlen(message)+1 );
 
+	/* On attend le message de bienvenue */
+	read(num_socket, message, strlen(BIENVENUE)+1);
+	printf("%s",message);
+
+	/* On initialise la table des sockets a écouter */
+	ndfs = getdtablesize();
+	FD_ZERO(&liste);
+
+	/* La socket 0 correspond a une saisie clavier validee par Enter */
+	FD_SET(0, &liste);
+	FD_SET(num_ocket, &liste);
+
+
+	while( 1 ) {
+		/* Nettoyage du buffer */
+		bzero(buf, MAXLEN);
+
+		/* Copie des listes de sockets */
+		memcpy(&liste2, &liste, sizeof(liste2));
+
+		/* Ecoute des sockets */
+		if(select(ndfs, & liste2, NULL, NULL, NULL) == -1 ){
+			/* Si on a pas eu d information sur la socket, c'est peut etre qu elle est interrompue (on a rien recu) */
+			if( errno == EINTR ) continue;
+
+			fprintf(stderr, "select: %s", strerror(errno));
+			exit(1);
+		}
+		if( FD_ISSET(0, &liste2) ) {
+			/* Ecriture du client sur l'entree standard */
+			buf = fgets(buf, MAXLEN, stdin);
+			/* S'il n'y a pas eu de probleme avec le nom */
+			if (etat == ETAT_INDIFFERENT){
+				/* Et que l'utilisateur est en train d'envoyer un message */
+				if (envoiEnCours){
+					strcat(message, buf);
+					write( num_socket, message, strlen(message)+1 );
+					fflush(stdout);
+					envoiEnCours=0;
+				}
+				/* Si l'utilisateur veut se deconnecter */
+				else if( !strncmp(buf, FIN, T_FIN) ){
+					/* demande de fin de connexion */
+					sprintf(buf, "Deconnexion de %s \n",nom);
+					write( num_socket, buf, strlen(buf)+1 );
+					close(num_socket);
+					return 0;
+				}
+				/* Si l'utilisateur demande la liste des cients présents */
+				else if( !strncmp(buf, LISTE, T_LISTE) ){
+					/* demande de la liste des connectés */
+					write( num_socket, buf, strlen(buf)+1 );
+				}
+
+				/* S'il demande l envoi de message */
+				else if( !strncmp(buf, ENVOI, T_ENVOI) ){
+					/* demande d'envoi d un message (Envoi nomDestinataire)*/
+					nomDest = (char *)malloc(strlen(buf)-T_ENVOI);
+					strncpy(nomDest,buf+T_ENVOI,strlen(buf)-T_ENVOI);
+					strcpy(message,NOMDEST);
+
+					char *nbr=(char *)malloc(sizeof(char)) ;
+					sprintf(nbr,"%d",strlen(nomDest)-1);
+					strcat(message,nbr);
+					strcat(message," ");
+					strncat(message,nomDest,strlen(nomDest)-1);
+					strcat(message, " ");
+					envoiEnCours =1;
+					printf("Message : ");
+					fflush(stdout);
+				}
+			}
+			else {
+				/* Dans ce cas l'utilsateur a voulu se connecter avec un nom deja utilisé, on lui en redemande donc un */
+				strcpy(message,"Pseudo : ");
+				char *p = strchr(buf,'\n');
+				if (p!=NULL) *p='\0';
+				strcat(message,buf);
+				write(num_socket, message, strlen(message)+1 );
+				etat = ETAT_INDIFFERENT;
+			}
+		}
+		/* Réception de données depuis la socket */
+		if(FD_ISSET(num_socket, &liste2)) {
+			/* S'il y a eu un probleme de lecture */
+			if( read(num_socket, buf, MAXLEN) == NULL){
+				printf("Déconnexion du serveur distant\n");
+				close (num_socket);
+				exit(1);
+			/* Sinon */
+			} else{
+				/* Si le serveur informe l'utilisateur que son nom est deja utilisé */
+				if(strncmp(buf,UTILISATEUR_EXISTANT,T_UTILISATEUR_EXISTANT)==0){
+					printf("Le pseudo choisi est déjà utilisé \n");
+					printf("Entrez un nouveau nom :\n");
+					/* On change d'état pour ne plus permettre l'envoi de message ou autres */
+					etat = ETAT_ENTRER_NOUVEAU_NOM;
+					fflush(stdout);
+				} else {
+					/* On affiche les données qui viennent d arriver (message) */
+					printf("%s",buf);
+					fflush(stdout);
+				}
+			}
+		}
+	}
 
   close(num_socket);
 }
