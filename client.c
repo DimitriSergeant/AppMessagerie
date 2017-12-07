@@ -39,7 +39,7 @@
 #define DEBUT "Connexion etablie \n"
 #define FIN "quit"
 #define LISTE "liste"
-#define ENVOI "envoi "
+#define ENVOI "envoi"
 #define NOMDEST "nomdest "
 #define UTILISATEUR_EXISTANT "Utilisateur existant\n"
 
@@ -199,7 +199,7 @@ void client_appli (char *serveur, int port, char *pseudo){
 					close(num_socket);
 					return ;
 				}
-				/* Si l'utilisateur demande la liste des cients présents */
+					/* Si l'utilisateur demande la liste des cients présents */
 				else if(!strncmp(buf, LISTE, strlen(LISTE)) ){
 					write( num_socket, buf, strlen(buf)+1 );
 				}

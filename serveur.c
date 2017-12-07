@@ -40,7 +40,7 @@
 #define DEBUT "Connexion etablie \n"
 #define FIN "quit"
 #define LISTE "liste"
-#define ENVOI "envoi "
+#define ENVOI "envoi"
 #define PSEUDO "pseudo : "
 #define NOMDEST "nomdest "
 
@@ -139,7 +139,7 @@ int main(int argc, char const *argv[])
 			exit(1);
 		}
 
-	// Si la requête concernéeest la socket de base, c'est qu'un client veut se connececter
+	// Si la requête concernée est la socket de base, c'est qu'un client veut se connececter
 		if( FD_ISSET(socket_serv, &listeClient) ) {
 			int taille = sizeof *adr_client;
 			if( (socket_client = accept(socket_serv,(struct sockaddr *)adr_client, &taille)) == -1 ) {
@@ -155,11 +155,15 @@ int main(int argc, char const *argv[])
 			write(socket_client, DEBUT, strlen(DEBUT)+1);
 			message = (char *)malloc (nb_co*BUFSIZE*sizeof(char));
 
-			strcpy(message,"Liste des connectes :\n");
-			if (nb_co==0)strcat(message,"Il n'y a personne de connecte pour le moment\n");
-			for (int i=0;i<nb_co;i++){
-				strcat(message,listeNom[i]);
-				strcat(message,"\n");
+
+			if (nb_co==0) {
+				strcat(message,"Il n'y a personne de connecte pour le moment\n");
+			}else{
+				strcpy(message,"Liste des connectes :\n");
+				for (int i=0;i<nb_co;i++){
+					strcat(message,listeNom[i]);
+					strcat(message,"\n");
+				}
 			}
 			nb_co++;
 			printf("%s\n",message);
@@ -217,7 +221,7 @@ int main(int argc, char const *argv[])
 						listeNom[nb_co]= (char *) malloc (BUFSIZE*sizeof(char));
 						strncat(listeNom[nb_co],message+strlen(PSEUDO),strlen(message)-strlen(PSEUDO));
 
-						//listeNumSocket[nb_co] = (int) malloc(sizeof(int));
+						listeNumSocket[nb_co] = (int) malloc(sizeof(int));
 						listeNumSocket[nb_co] = socket_client;
 						nb_co++;
 					}
