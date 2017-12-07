@@ -161,6 +161,7 @@ int main(int argc, char const *argv[])
 				strcat(message,listeNom[i]);
 				strcat(message,"\n");
 			}
+			nb_co++;
 			printf("%s\n",message);
 			write(socket_client,message,strlen(message));
 		}
