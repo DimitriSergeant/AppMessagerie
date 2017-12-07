@@ -47,12 +47,30 @@
 #define PORT_DEFAUT 1111
 #define PROTOCOLE_DEFAUT "TCP"
 
+
+char *lecture_client(int socket){
+	char *message = (char *)malloc(BUFSIZE * sizeof(char));
+	int nb_lu;
+	nb_lu = read(socket, msg, BUFSIZE);
+
+	if( nb_lu > 0 ) {
+		printf("Message: %s\n", message);
+		fflush(stdout);
+		return message;
+	}
+	else{
+		return NULL;
+	}
+}
+
+
+
 int main(int argc, char const *argv[])
 {
 	struct sockaddr_in *adr_serveur, *adr_client;
 	fd_set listeClient, listeCopie;
 	int socket_client;
-	int opt = 1, port;
+	int opt = 1; 
 	char *message;
 
 	int port = PORT_DEFAUT;
@@ -107,42 +125,144 @@ int main(int argc, char const *argv[])
 	FD_SET(serv_sock, & listeCopie);
 
 //Gestion des clients
-while( 1 ) {
+	while( 1 ) {
 	//On copie les listes de sockets
-	memcpy(&listeClient, &listeCopie, sizeof(listeClient));
+		memcpy(&listeClient, &listeCopie, sizeof(listeClient));
 
 	// On lance la surveillance des descripteurs en lecture
-	if( select(nbClient, & listeClient, 0, 0, 0) == -1 ) {
+		if( select(nbClient, & listeClient, 0, 0, 0) == -1 ) {
 		//On vérifie qu'on a bien reçu quelquechose
-		if( errno == EINTR ) continue;
-		fprintf(stderr,"select: %s", strerror(errno));
-		exit(1);
-	}
-
-	/* Si on recoit sur la socket de base, c'est qu'un client veux se connecter */
-	if( FD_ISSET(socket_serv, &listeClient) ) {
-		taille = sizeof *adr_client;
-		if( (socket_client = accept(socket_serv,(struct sockaddr *)adr_client, &taille)) == -1 ) {
-			fprintf(stderr, "connexion impossible\n");
+			if( errno == EINTR ) continue;
+			fprintf(stderr,"select: %s", strerror(errno));
 			exit(1);
 		}
-		printf("Connexion d'un client depuis %s \n", inet_ntoa(*adr_client.sin_addr));
-		fflush(stdout);
 
-			/* Ajout du client dans les sockets a surveiller */
-		FD_SET(socket_client, &listeCopie);
+	// Si la requête concernéeest la socket de base, c'est qu'un client veut se connececter
+		if( FD_ISSET(socket_serv, &listeClient) ) {
+			taille = sizeof *adr_client;
+			if( (socket_client = accept(socket_serv,(struct sockaddr *)adr_client, &taille)) == -1 ) {
+				fprintf(stderr, "connexion impossible\n");
+				exit(1);
+			}
+			printf("Connexion d'un client depuis %s \n", inet_ntoa(*adr_client.sin_addr));
+			fflush(stdout);
 
-			/* Souhaiter la bienvenue au client puis lui envoyer la liste des connectés*/
-		write(socket_client, BIENVENUE, strlen(BIENVENUE)+1);
-		message = (char *)malloc (k*BUFSIZE*sizeof(char));
+			//On ajoute le client dans les sockets sous surveillance
+			FD_SET(socket_client, &listeCopie);
+		//On confirme sa connection au client puis on lui donne la liste des autres connectés
+			write(socket_client, DEBUT, strlen(DEBUT)+1);
+			message = (char *)malloc (k*BUFSIZE*sizeof(char));
 
-		strcpy(message,"Liste des connectes :\n");
-		if (k==0)strcat(message,"Il n'y a personne de connecte pour le moment\n");
-		for (i=0;i<k;i++){
-			strcat(message,listeNom[i]);
-			strcat(message,"\n");
+			strcpy(message,"Liste des connectes :\n");
+			if (k==0)strcat(message,"Il n'y a personne de connecte pour le moment\n");
+			for (i=0;i<k;i++){
+				strcat(message,listeNom[i]);
+				strcat(message,"\n");
+			}
+			printf("%s\n",message);	
+			write(socket_client,message,strlen(message));
 		}
-		printf("%s\n",message);
-		write(socket_client,message,strlen(message));
+	}
+
+	// On vérifie si les sockets des clients ont bougé*/
+	for( fd=0; fd<nbClient; fd++ ){
+		if( fd != socket_serv && FD_ISSET(fd, &listeClient) ){
+				//Si un client déconnecte
+			if( (message = lecture_client(fd)) == NULL ) {
+				int i=0;
+					//On cherche qui a déconnecté
+				while(  i<k && listeNumSocket[i]!=fd ){
+					i++;
+				}
+				if (i<k){
+					printf("Deconnexion de : %s\n",listeNom[i]);
+						//On cherchele nom du client pour le supprimer
+					while(i<k-1){
+						listeNumSocket[i]=listeNumSocket[i+1];
+						listeNom[i] = listeNom[i+1];
+						i++;
+					}
+					k--;
+				}
+					//Et on clot la socket correspondante
+				close(fd);
+				FD_CLR(fd, &listeCopie);
+			}
+			else{ 
+					//On ajoute un client
+				if (strncmp(message,PSEUDO,strlen(PSEUDO))==0){	
+					printf("verification du pseudo\n");
+					printf(message+strlen(PSEUDO));
+
+						//On vérifie que le pseudo n'est pas déjà utilisé
+					int i=0;
+					int doublon_nom = 0;						
+					for(i=0;i<k;i++){
+						if (strlen(message+strlen(PSEUDO))==strlen(listeNom[i])){
+							if(strncmp(message+strlen(PSEUDO),listeNom[i],strlen(message)-strlen(PSEUDO)-1)==0){										
+									//Le client doit donc changer de peseudo
+								write( fd, UTILISATEUR_EXISTANT, T_UTILISATEUR_EXISTANT+1 );
+								doublon_nom = 1;
+								break;
+							}
+						}
+					}
+
+						//Si le pseudo esy libre
+					if(doublon_nom==0){	
+							/* On l'ajoute à la liste des noms */
+						listeNom[k]= (char *) malloc (BUFSIZE*sizeof(char));
+						strncat(listeNom[k],message+strlen(PSEUDO),strlen(message)-strlen(PSEUDO));
+
+						listeNumSocket[k] = (int) malloc(sizeof(int));
+						listeNumSocket[k] = socket_client;
+						k++;
+					}
+				}
+
+					//Affichage de la liste des connectés
+				else if (strncmp(message,LISTE,strlen(PSEUDO))==0){
+					message = (char *)malloc (k*BUFSIZE*sizeof(char));
+					strcpy(message,"connectés :\n");
+					if (k==1) strcat(message,"Personne n'est en ligne\n");
+					for (i=0;i<k;i++){
+						if(listeNumSocket[i]!=fd){
+							strcat(message,listeNom[i]);
+							strcat(message,"\n");
+						}
+					}
+					write(fd,message,strlen(message));
+				}
+
+					//Envoie des messagees
+				else if (strncmp(message,NOMDEST,strlen(NOMDEST))==0){
+					char *nomDestinataire= (char *)malloc(BUFSIZE * sizeof(char));
+					char *messageDest= (char *)malloc(BUFSIZE * sizeof(char));
+					char *c = (char *)malloc(sizeof(char));
+					strncpy(c,message+strlen(NOMDEST),1);
+					int lg = atoi(c);
+					strncpy(nomDestinataire,message+strlen(NOMDEST)+2,lg);
+					strncpy(messageDest,message+strlen(NOMDEST)+lg+2,strlen(message)-lg-3);
+
+						//Recherche de la socket liée
+					i=0;
+					while(i<k && strcmp(listeNom[i],nomDestinataire)!=0){i++;}
+
+					if(i<k){
+					//Recherche de l'émetteur
+						int j=0;
+						while(j<k && listeNumSocket[j]!=fd){j++;}
+						strcpy(message,listeNom[j]);
+						strcat(message," dit : ");
+						strcat(message,messageDest);
+						printf("%s\n",message);
+						write(listeNumSocket[i],message,strlen(message));
+					}
+					else{
+						write(fd,"Le pseudo de destinataire n'existe pas\n",strlen("Le pseudo de destinataire n'existe pas\n"));
+					}
+				}
+			}	
+		}
 	}
 }
