@@ -106,7 +106,7 @@ int connexion(char *serveur, int port, char *protocole){
   if( adr_serveur->sin_addr.s_addr != -1 ){
 		/* On se connecte au serveur */
 		res = connect(num_socket, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur) );
-	}else {
+	}else{
 		/* Le serveur est designe par son nom, on va donc lancer une requete DNS. */
 		host = gethostbyname(serveur);
 
@@ -142,7 +142,7 @@ void client_appli (char *serveur, int port, char *pseudo){
 
 	/* Creation de variables pour la liste des sockets a écouter */
 	int table_size, etat=0;
-	bool envoiUtilisateur = false;
+	int envoiUtilisateur = 0;
 	fd_set liste, liste2;
 
   int num_socket = connexion(serveur, port, protocole);
@@ -164,7 +164,7 @@ void client_appli (char *serveur, int port, char *pseudo){
 	FD_SET(0, &liste);
 	FD_SET(num_socket, &liste);
 
-	while( true ) {
+	while( 1 ) {
 		/* Mise à 0 de tous les bits du buffer */
 		bzero(buf, MAXLEN);
 
@@ -189,10 +189,10 @@ void client_appli (char *serveur, int port, char *pseudo){
 					strcat(message, buf);
 					write( num_socket, message, strlen(message)+1 );
 					fflush(stdout);
-					envoiUtilisateur=false;
+					envoiUtilisateur=0;
 				}
 				/* Si l'utilisateur veut se deconnecter */
-				else if(!strncmp(buf, FIN, strlen(FIN) ){
+				else if(!strncmp(buf, FIN, strlen(FIN))){
 					/* demande au serveur la fin de connexion */
 					sprintf(buf, "Deconnexion de %s \n",pseudo);
 					write( num_socket, buf, strlen(buf)+1 );
@@ -208,20 +208,21 @@ void client_appli (char *serveur, int port, char *pseudo){
 				else if(!strncmp(buf, ENVOI, strlen(ENVOI)) ){
 					/* demande d'envoi d un message (Envoi nomDestinataire)*/
 					nomDest = (char *)malloc(strlen(buf)-strlen(ENVOI));
-					strncpy(nomDest,buf+T_ENVOI,strlen(buf)-strlen(ENVOI));
+					strncpy(nomDest,buf+strlen(ENVOI),strlen(buf)-strlen(ENVOI));
 					strcpy(message,NOMDEST);
 
 					char *n=(char *)malloc(sizeof(char)) ;
 					sprintf(n,"%d",(int)strlen(nomDest)-1);
-					strcat(message,nbr);
+					strcat(message,n);
 					strcat(message," ");
 					strncat(message,nomDest,strlen(nomDest)-1);
 					strcat(message, " ");
-					envoiUtilisateur = true;
+					envoiUtilisateur = 1;
 					printf("Message : ");
 					fflush(stdout);
 				}
-			} else {
+			}
+			else{
 				/* Dans ce cas l'utilsateur a voulu se connecter avec un nom deja utilisé, il doit en saisir un nouveau */
 				strcpy(message,"Pseudo : ");
 				char *p = strchr(buf,'\n');
@@ -240,7 +241,7 @@ void client_appli (char *serveur, int port, char *pseudo){
 				exit(1);
 			}else{
 				/* Si le serveur informe l'utilisateur que son pseudo n'est pas disponible */
-				if(strncmp(buf,UTILISATEUR_EXISTANT,T_UTILISATEUR_EXISTANT)==0){
+				if(strncmp(buf,UTILISATEUR_EXISTANT,strlen(UTILISATEUR_EXISTANT))==0){
 					printf("Le pseudo choisi est déjà utilisé \n Pseudo :\n");
 					/* On change d'état pour ne plus permettre l'envoi de message */
 					etat = ETAT_NOUVEAU_NOM;
