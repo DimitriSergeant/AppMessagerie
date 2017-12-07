@@ -35,17 +35,17 @@
 #define MAX_CLIENTS 10
 #define MAX_CONNECTIONS 5
 
-#define BIENVENUE "Connexion etablie\n"
-#define FIN "Fin connexion"
-
+#define DEBUT "Connexion etablie \n"
+#define FIN "quit"
 #define LISTE "liste"
-
+#define ENVOI "envoi "
 #define PSEUDO "pseudo : "
-
 #define NOMDEST "nomdest "
 
 #define UTILISATEUR_EXISTANT "Utilisateur existant\n"
-#define T_UTILISATEUR_EXISTANT strlen(UTILISATEUR_EXISTANT)
+
+#define PORT_DEFAUT 1111
+#define PROTOCOLE_DEFAUT "TCP"
 
 int main(int argc, char const *argv[])
 {
@@ -53,11 +53,13 @@ int main(int argc, char const *argv[])
 	fd_set listeClient, listeCopie;
 	int socket_client;
 	int opt = 1, port;
-	char *message;	
+	char *message;
 
+	int port = PORT_DEFAUT;
 
-// On vérifie que l'appel au programme est bien fait 
+// On vérifie que l'appel au programme est bien fait
 	switch( argc ) {
+		case 1: printf("defaut service = %s\n", port); break;
 		case 2: port = atoi(argv[1]); break;
 		default:
 		fprintf(stderr,"Usage: %s [port]\n",argv[0]);
@@ -103,20 +105,19 @@ int main(int argc, char const *argv[])
 	nbClient = getdtablesize();
 	FD_ZERO(&listeCopie);
 	FD_SET(serv_sock, & listeCopie);
-}
+
 //Gestion des clients
 while( 1 ) {
-	//On copie les listes de sockets 
+	//On copie les listes de sockets
 	memcpy(&listeClient, &listeCopie, sizeof(listeClient));
 
 	// On lance la surveillance des descripteurs en lecture
 	if( select(nbClient, & listeClient, 0, 0, 0) == -1 ) {
-		//On vérifie qu'on a bien reçu quelquechose 
-		if( errno == EINTR ) continue;		  
+		//On vérifie qu'on a bien reçu quelquechose
+		if( errno == EINTR ) continue;
 		fprintf(stderr,"select: %s", strerror(errno));
 		exit(1);
 	}
-
 
 	/* Si on recoit sur la socket de base, c'est qu'un client veux se connecter */
 	if( FD_ISSET(socket_serv, &listeClient) ) {
@@ -144,3 +145,4 @@ while( 1 ) {
 		printf("%s\n",message);
 		write(socket_client,message,strlen(message));
 	}
+}
