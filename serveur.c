@@ -77,12 +77,12 @@ int main(int argc, char const *argv[])
 
 	int port = PORT_DEFAUT;
 
-// On vérifie que l'appel au programme est bien fait
+// Vérification de l'appel au programme
 	switch( argc ) {
-		case 1: printf("defaut service = %i\n", port); break;
+		case 1: printf("defaut = %i\n", port); break;
 		case 2: port = atoi(argv[1]); break;
 		default:
-		fprintf(stderr,"Usage: %s [port]\n",argv[0]);
+		fprintf(stderr,"Utilisation: %s [port]\n",argv[0]);
 		break;
 	}
 	printf("On crée le serveur ...");
@@ -92,7 +92,7 @@ int main(int argc, char const *argv[])
 
 //Liste des clients connectés
 	char * listeNom[MAX_CLIENTS];
-	int listeNumSocket[MAX_CLIENTS];
+	int numsSocket[MAX_CLIENTS];
 
 //Création de la socket du serveur
 	int socket_serv = socket(PF_INET, SOCK_STREAM, 0);
@@ -110,7 +110,7 @@ int main(int argc, char const *argv[])
 
 //On associe la socket au port
 	if (bind(socket_serv, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur)) == -1){
-		fprintf(stderr, "Echec\n");
+		fprintf(stderr, "Echec : adresse indisponible\n");
 		exit(1);
 	}
 
@@ -178,14 +178,14 @@ int main(int argc, char const *argv[])
 			if( (message = lecture_client(fd)) == NULL ) {
 				int i=0;
 					//On cherche qui a déconnecté
-				while(  i<nb_co && listeNumSocket[i]!=fd ){
+				while(  i<nb_co && numsSocket[i]!=fd ){
 					i++;
 				}
 				if (i<nb_co){
 					printf("Deconnexion de : %s\n",listeNom[i]);
 						//On cherchele nom du client pour le supprimer
 					while(i<nb_co-1){
-						listeNumSocket[i]=listeNumSocket[i+1];
+						numsSocket[i]=numsSocket[i+1];
 						listeNom[i] = listeNom[i+1];
 						i++;
 					}
@@ -221,8 +221,8 @@ int main(int argc, char const *argv[])
 						listeNom[nb_co]= (char *) malloc (BUFSIZE*sizeof(char));
 						strncat(listeNom[nb_co],message+strlen(PSEUDO),strlen(message)-strlen(PSEUDO));
 
-						listeNumSocket[nb_co] = (int) malloc(sizeof(int));
-						listeNumSocket[nb_co] = socket_client;
+						numsSocket[nb_co] = (int) malloc(sizeof(int));
+						numsSocket[nb_co] = socket_client;
 						nb_co++;
 					}
 				}
@@ -233,7 +233,7 @@ int main(int argc, char const *argv[])
 					strcpy(message,"connectés :\n");
 					if (nb_co==1) strcat(message,"Personne n'est en ligne\n");
 					for (int i=0;i<nb_co;i++){
-						if(listeNumSocket[i]!=fd){
+						if(numsSocket[i]!=fd){
 							strcat(message,listeNom[i]);
 							strcat(message,"\n");
 						}
@@ -258,12 +258,12 @@ int main(int argc, char const *argv[])
 					if(i<nb_co){
 					//Recherche de l'émetteur
 						int j=0;
-						while(j<nb_co && listeNumSocket[j]!=fd){j++;}
+						while(j<nb_co && numsSocket[j]!=fd){j++;}
 						strcpy(message,listeNom[j]);
 						strcat(message," dit : ");
 						strcat(message,messageDest);
 						printf("%s\n",message);
-						write(listeNumSocket[i],message,strlen(message));
+						write(numsSocket[i],message,strlen(message));
 					}
 					else{
 						write(fd,"Le pseudo de destinataire n'existe pas\n",strlen("Le pseudo de destinataire n'existe pas\n"));
