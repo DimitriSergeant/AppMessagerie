@@ -1,258 +1,268 @@
-/******************************************************************************/
-/*							Application: Messagerie	multi-utilisateurs										*/
-/******************************************************************************/
-/*									      																										*/
-/*			 									programme  CLIENT				      											*/
-/*									      																										*/
-/******************************************************************************/
-/*									      																										*/
-/*		Auteurs : Dimitri SERGEANT , Léo VALETTE											 					*/
-/*									      																										*/
-/******************************************************************************/
+#include "utils.h"
 
+#define NEED_NEW_NAME 1
+#define DEFAULT_STATE 0
 
-/* client.c
- * Arguments : nom du serveur, port, pseudo du client
-*/
+#define QUIT "quit"
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <fcntl.h>
-
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/signal.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-
-//#include <signal.h>
-
-#define MAXLEN 1024
-
-#define PROTOCOLE_DEFAUT "TCP"
-
-#define DEBUT "Connexion etablie \n"
-#define FIN "quit"
-#define LISTE "liste"
-#define ENVOI "envoi"
-#define NOMDEST "nomdest "
-#define UTILISATEUR_EXISTANT "Utilisateur existant\n"
-
-#define ETAT_NOUVEAU_NOM 1
-#define ETAT_AUTRE 0
-
-
-void client_appli (char *serveur, int port, char *pseudo);
-
-
-/**********************************************************/
-/*--------------- programme client -----------------------*/
-
-
-int main( int argc, char**argv )
-{
-	/* Definition de variables pour le programme */
-	int port;
-	char *pseudo = (char *)malloc(MAXLEN*sizeof(char));
-	char *serveur = (char *)malloc(MAXLEN*sizeof(char));
-
-	/* On vérifie que l'appel au programme est bien fait */
-	if( argc != 3) {
-		fprintf(stderr, "%s <serveur> <port> \n", argv[0]);
-		return 1;
+void checkUsage(int argc, char **argv) {
+	if (argc != 4) {
+		printf("%s <server> <port> <username> \n", argv[0]);
+		exit(EXIT_FAILURE);
 	}
-  /* On recupere le pseudo du client */
-	printf("Pseudo: ");
-	scanf(" %s", pseudo);
-	printf("\n");
-	/* On recupère le port ou se trouve le serveur */
-	port = atoi(argv[2]);
-	/* on récupère l'adresse du serveur */
-	serveur = argv[1];
+}
 
-  /* serveur est le nom (ou l'adresse IP) auquel le client va acceder */
-	/* port le numero de port sur le serveur correspondant au  */
-	/* service desire par le client */
-	printf("Connexion au serveur %s depuis le port %d -\n", serveur, port);
+void setUsername(char **argv, char *username) {
+	strcpy(username, argv[3]);
+}
 
-	client_appli(serveur, port, pseudo);
+void setServerPort(char **argv, int* port) {
+	*port = atoi(argv[2]);
+}
+
+void setServerAdressString(char **argv, char *serverAdressString) {
+	strcpy(serverAdressString, argv[1]);
+}
+
+int initSocket(struct sockaddr_in ipAddress, int port, char* serverIP) {
+	int idSocket;
+	int connectReturn;
+
+	// AF_INET -> use of IPv4
+	ipAddress.sin_family = AF_INET;
+
+	// Converts integer port into "real usable" port
+	ipAddress.sin_port = htons(port);
+
+	// Converts IPv4 number-dot to a "real usable" address
+	ipAddress.sin_addr.s_addr = inet_addr(serverIP);
+
+	// Create the socket : using IPv4, TCP (byte stream socket and 0)
+	idSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+	// check the format of the given adress
+	if (ipAddress.sin_addr.s_addr == -1) {
+		printf("Socket error\n");
+		exit(EXIT_FAILURE);
+	} else {
+		// Connection to the server
+		// idSocket -> the id of the socket previously created
+		// ipAddress -> pointer to an sockaddr struct which contains port and Id of the remote socket
+		// sizeof(ipAddress) -> size of the struct
+		struct sockaddr *ipAddressAsSockaddr = (struct sockaddr *) &ipAddress ;
+		connectReturn = connect(idSocket, ipAddressAsSockaddr, sizeof(ipAddress) );
+		printf("connectReturn = %i\n", connectReturn);
+	}
+
+	// Check if connection succeded
+	if (connectReturn != 0) {
+		printf("Remote service unreachable on server %s\n ", serverIP);
+		exit(EXIT_FAILURE);
+	}
+
+	//return the Id of the socket created
+	return idSocket;
+}
+
+void sendName(char* message, char* name, int idSocket) {
+
+	// send NAME flag +requested name to server
+	strcpy(message, NAME);
+	strcat(message, name);
+	write(idSocket, message, strlen(message) + 1);
+
+	// Receive and print server's welcome message
+	read(idSocket, message, strlen(WLCM_MESSAGE) + 1);
+	printf("%s", message);
 }
 
 
-// établie la connexion au serveur via le protocole et le port donné
-int connexion(char *serveur, int port, char *protocole){
-  struct sockaddr_in *adr_serveur;
-  int res;
-	struct hostent *host;
 
-	adr_serveur = (struct sockaddr_in *) malloc (sizeof(struct sockaddr_in));
-  //  bzero( (void *)sock_serveur, sizeof *sock_serveur );
+void doUserAction(char* message, char* buf, char* name, int idSocket, int *sendInProgress) {
 
-	/* On met à jours les informations de la socket : adresse à joindre, port destinataire et type de socket */
-	adr_serveur->sin_family = AF_INET;
-  adr_serveur->sin_port = htons(port);
-  adr_serveur->sin_addr.s_addr = inet_addr( serveur );
 
-  /* on créé la socket */
-	int num_socket = socket(AF_INET,SOCK_STREAM,0);
+	// If the user is sending a message
+	if (*sendInProgress) {
+		strcat(message, buf);
+		write(idSocket, message, strlen(message) + 1);
+		fflush(stdout);
+		*sendInProgress = false;
+	}
+	// If the user asked from a disconnection
+	else if (strncmp(buf, QUIT, strlen(QUIT)) == 0) {
+		// Send info to server
+		sprintf(buf, "Disconnection asked by %s\n", name);
+		write(idSocket, buf, strlen(buf) + 1);
+		// Close socket and end application
+		close(idSocket);
+		exit(EXIT_SUCCESS);
+	}
+	// If the user asked for the list of connected users
+	else if (strncmp(buf, LIST, strlen(LIST)) == 0) {
+		// Send this flag to server
+		write(idSocket, buf, strlen(buf) + 1);
+	}
+	// If the user wants to send a message
+	else if (strncmp(buf, SENDTO, strlen(SENDTO)) == 0) {
+		char *recipientUsernameLength = (char *) malloc(sizeof(char)) ;
+		char *recipientUsername = (char *) malloc(strlen(buf) - strlen(SENDTO));
+		strncpy(recipientUsername, buf + strlen(SENDTO), strlen(buf) - strlen(SENDTO));
+		strcpy(message, MSGTAG);
+		sprintf(recipientUsernameLength, "%lu", strlen(recipientUsername) - 1);
 
-	/////////////////adr_socket(port, NULL, SOCK_STREAM, &adr_serveur);
+		strcat(message, recipientUsernameLength); strcat(message, " ");
+		strncat(message, recipientUsername, strlen(recipientUsername) - 1); strcat(message, " ");
 
-  if( adr_serveur->sin_addr.s_addr != -1 ){
-		/* On se connecte au serveur */
-		res = connect(num_socket, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur) );
-	}else{
-		/* Le serveur est designe par son nom, on va donc lancer une requete DNS. */
-		host = gethostbyname(serveur);
-
-		if( host == NULL ){
-			switch( h_errno ) {
-			     case HOST_NOT_FOUND: fprintf(stderr, "Serveur introuvable : "); break;
-			     case NO_ADDRESS: fprintf(stderr, "Pas d'adresse IP pour ce serveur :"); break;
-			     case NO_RECOVERY: fprintf(stderr, "Erreur fatale du serveur de nom : "); break;
-			     case TRY_AGAIN: fprintf(stderr, "Serveur de nom indisponible, reessayez plus tard :"); break;
-			}
-		}else{
-			for(int i=0, res=-1; (res==-1) && (host->h_addr_list[i] != NULL ) ; i++) {
-				/* On essaie de se connecter au serveur trouvé par la requête DNS */
-				bcopy( (char *) host->h_addr_list[i], (char *)&(adr_serveur->sin_addr), sizeof(adr_serveur->sin_addr) );
-				res = connect(num_socket, (struct sockaddr *)adr_serveur, sizeof(*adr_serveur) );
-			}
-		}
-  }
-  if( res != 0 ) {
-    fprintf(stderr, "Service distant [port %d] inaccessible sur le serveur %s \n ", port, serveur );
-    return -1;
-  }
-	return num_socket;
+		*sendInProgress = true;
+		printf("Message : "); fflush(stdout);
+	}
 }
 
-/*****************************************************************************/
-void client_appli (char *serveur, int port, char *pseudo){
+void askNewName(char* message, char* buf, int idSocket, int* nameState) {
 
-  char *protocole = PROTOCOLE_DEFAUT; /* TCP */
-  char *message = (char *)malloc(MAXLEN*sizeof(char));
-	char *buf = (char *)malloc(MAXLEN*sizeof(char));
-	char *nomDest;
+	// set the end of string ('\0') to first '\n' encountered (to remove it -and anything below- from buf)
+	char *p = strchr(buf, '\n');
+	if (p != NULL) {
+		*p = '\0';
+	}
 
-	/* Creation de variables pour la liste des sockets a écouter */
-	int table_size, etat=0;
-	int envoiUtilisateur = 0;
-	fd_set liste, liste2;
+	// send NAME flag + new requested name to server
+	strcpy(message, NAME);
+	strcat(message, buf);
+	write(idSocket, message, strlen(message) + 1);
 
-  int num_socket = connexion(serveur, port, protocole);
+	// set state to not new name requesting, server'll change that if needed
+	*nameState = DEFAULT_STATE;
+}
 
-  /* On envoie le pseudo du client au serveur */
-	strcpy(message,"pseudo : ");
-	strcat(message,pseudo);
-	write(num_socket, message, strlen(message)+1 );
 
-	/* On attend le message de bienvenue */
-	read(num_socket, message, strlen(DEBUT)+1);
-	printf("%s",message);
+void readReceivedMessage(char *buf, int socket, int *nameState) {
 
-	/* On initialise la table des sockets a écouter */
-	table_size = getdtablesize();
-	FD_ZERO(&liste);
+	int readResult;
+	readResult = read(socket, buf, BUFSIZE);
 
-	/* La socket 0 correspond a une saisie clavier achevée par l'utilisation de la touche entrée*/
-	FD_SET(0, &liste);
-	FD_SET(num_socket, &liste);
+	// A read error has occured
+	if (readResult == -1) {
+		printf("Read error\n");
+		printf("Disconnection from the remote server\n");
+		close (socket);
+		exit(EXIT_FAILURE);
 
-	while( 1 ) {
-		/* Mise à 0 de tous les bits du buffer */
-		bzero(buf, MAXLEN);
-
-		/* Copie des listes de sockets */
-		memcpy(&liste2, &liste, sizeof(liste2));
-
-		/* Ecoute des sockets */
-		if(select(table_size, &liste2, NULL, NULL, NULL) == -1 ){
-			/* Si on a pas eu d information sur la socket, on test si elle n'a pas été interrompue */
-			if( errno == EINTR ) continue;
-			fprintf(stderr, "select: %s", strerror(errno));
-			exit(1);
-		}
-
-		if( FD_ISSET(0, &liste2) ) {
-			/* Ecriture du client sur l'entree standard */
-			buf = fgets(buf, MAXLEN, stdin);
-			/* S'il n'y a pas eu de probleme avec le nom */
-			if (etat == ETAT_AUTRE){
-				/* Si l'utilisateur est en train d'envoyer un message */
-				if (envoiUtilisateur){
-					strcat(message, buf);
-					write( num_socket, message, strlen(message)+1 );
-					fflush(stdout);
-					envoiUtilisateur=0;
-				}
-				/* Si l'utilisateur veut se deconnecter */
-				else if(!strncmp(buf, FIN, strlen(FIN))){
-					/* demande au serveur la fin de connexion */
-					sprintf(buf, "Deconnexion de %s \n",pseudo);
-					write( num_socket, buf, strlen(buf)+1 );
-					close(num_socket);
-					return ;
-				}
-					/* Si l'utilisateur demande la liste des cients présents */
-				else if(!strncmp(buf, LISTE, strlen(LISTE)) ){
-					write( num_socket, buf, strlen(buf)+1 );
-				}
-
-				/* S'il demande l envoi de message */
-				else if(!strncmp(buf, ENVOI, strlen(ENVOI)) ){
-					/* demande d'envoi d un message (Envoi nomDestinataire)*/
-					nomDest = (char *)malloc(strlen(buf)-strlen(ENVOI));
-					strncpy(nomDest,buf+strlen(ENVOI),strlen(buf)-strlen(ENVOI));
-					strcpy(message,NOMDEST);
-
-					char *n=(char *)malloc(sizeof(char)) ;
-					sprintf(n,"%d",(int)strlen(nomDest)-1);
-					strcat(message,n);
-					strcat(message," ");
-					strncat(message,nomDest,strlen(nomDest)-1);
-					strcat(message, " ");
-					envoiUtilisateur = 1;
-					printf("Message : ");
-					fflush(stdout);
-				}
-			}
-			else{
-				/* Dans ce cas l'utilsateur a voulu se connecter avec un nom deja utilisé, il doit en saisir un nouveau */
-				strcpy(message,"Pseudo : ");
-				char *p = strchr(buf,'\n');
-				if (p!=NULL) *p='\0';
-				strcat(message,buf);
-				write(num_socket, message, strlen(message)+1 );
-				etat = ETAT_AUTRE;
-			}
-		}
-		/* Réception de données depuis la socket */
-		if(FD_ISSET(num_socket, &liste2)) {
-			/* S'il y a eu un probleme de lecture */
-			if( read(num_socket, buf, MAXLEN) == NULL){
-				printf("Déconnexion du serveur distant\n");
-				close (num_socket);
-				exit(1);
-			}else{
-				/* Si le serveur informe l'utilisateur que son pseudo n'est pas disponible */
-				if(strncmp(buf,UTILISATEUR_EXISTANT,strlen(UTILISATEUR_EXISTANT))==0){
-					printf("Le pseudo choisi est déjà utilisé \n Pseudo :\n");
-					/* On change d'état pour ne plus permettre l'envoi de message */
-					etat = ETAT_NOUVEAU_NOM;
-					fflush(stdout);
-				} else {
-					/* On affiche les données qui on été récéptionnées  */
-					printf("%s",buf);
-					fflush(stdout);
-				}
+	} else {
+		if (readResult == 0) {
+			printf("Server shutdown\n");
+			printf("Disconnection from the remote server\n");
+			close (socket);
+			exit(EXIT_FAILURE);
+		} else {
+			// If the server tells the user his username is already taken
+			if (strncmp(buf, USERNAMETAKEN, strlen(USERNAMETAKEN)) == 0) {
+				printf("Username already taken\n");
+				printf("Please select another one :\n");
+				// Change unsernameState to avoid the send of new message
+				*nameState = NEED_NEW_NAME;
+				fflush(stdout);
+			} else {
+				// Display server message
+				printf("%s", buf);
+				fflush(stdout);
 			}
 		}
 	}
-  close(num_socket);
 }
+
+
+
+int main( int argc, char**argv ) {
+
+	char *username = (char *) malloc(BUFSIZE * sizeof(char)); // quite obvious
+	char *serverAdressString = (char *) malloc(BUFSIZE * sizeof(char)); // server IP entered by user ("127.0.0.1" for example)
+	int serverPort ;
+	int idSocket ; // own socket number
+	char * message = (char *) malloc (BUFSIZE * sizeof(char)); // buffer used to send messages to server
+	int maxClientsNumber;
+	fd_set socketList, currentWorkingList ; // socket lists (see further for explanation of need of 2 lists)
+	int unsernameState = DEFAULT_STATE ;
+	bool sendInProgress = false ; // whether the user is currently sending a message to server or not
+	struct sockaddr_in ipAddress;
+
+
+	char *buf = (char *)malloc(BUFSIZE * sizeof(char));
+
+
+	printf("Launching application\n");
+	printf("Setting up application\n");
+
+	checkUsage(argc, argv);
+
+	setUsername(argv, username);
+
+	setServerAdressString(argv, serverAdressString);
+	setServerPort(argv, &serverPort);
+
+	printf("Application ready\n");
+	printf("Connection to server on adress %s and port %d\n", serverAdressString, serverPort);
+
+	// Setup socket's information (adress, destination port and socket type)
+	idSocket = initSocket(ipAddress, serverPort, serverAdressString);
+
+	// Send username and hence receive welcome message
+	sendName(message, username, idSocket);
+
+	// get descriptor table size aka max number of files open by the process => maximum number of clients
+	maxClientsNumber = getdtablesize();
+
+	// Empty socket list
+	FD_ZERO(&socketList);
+
+	// Add socket 0 -> stdin
+	FD_SET(0, &socketList);
+
+	// Add the socket with to the socket list
+	FD_SET(idSocket, &socketList);
+
+	while (true) {
+
+		// Reinit message buffer
+		bzero(buf, BUFSIZE);
+
+		// first list won't move during iteration, second is dynamic in iteration
+		// it is copied here to ensure static list is up to date
+		memcpy(&currentWorkingList, &socketList, sizeof(currentWorkingList));
+
+		// socketListn list's sockets
+		if (select(maxClientsNumber, &currentWorkingList, 0, 0, 0) == -1) {
+			// EINTR just means "nothing received"
+			if (errno == EINTR) {
+				continue;
+			}
+
+			fprintf(stderr, "Select error: %s", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		// If something was received from stdin
+		if (FD_ISSET(0, &currentWorkingList)) {
+			//Write client on stdout
+			buf = fgets(buf, BUFSIZE, stdin);
+
+			//If the user chose an available name
+			if (unsernameState != NEED_NEW_NAME) {
+				// parse user instruction to decide what to do and do it
+				doUserAction(message, buf, username, idSocket, &sendInProgress);
+			} else {
+				// Ask server if "buf" is an available name
+				askNewName(message, buf, idSocket, &unsernameState);
+			}
+		}
+		// If something was received from server
+		if (FD_ISSET(idSocket, &currentWorkingList)) {
+			// parse received message and decide what to do
+			// updates buf
+			readReceivedMessage(buf, idSocket, &unsernameState);
+		}
+	}
+	close(idSocket);
+	return 0;
+}
+
+
