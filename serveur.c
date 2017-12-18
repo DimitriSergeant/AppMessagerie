@@ -13,7 +13,7 @@
 
 #include "utils.h"
 
-
+//Vérification de l'appel au programme
 void checkUsage(int argc, char **argv){
 	if (argc > 2){
 		printf("Usage: %s <port>\n",argv[0]);
@@ -21,290 +21,265 @@ void checkUsage(int argc, char **argv){
 	}
 }
 
-// CheccurrentlyActiveClientsright usage of command and set port as parameter if defined, as DEFAULT_PORT otherwise
+// Défini le port
 int setPort(int argc, char **argv){
 
 	int result ;
 
 	switch(argc) {
-		case 2: // port provided
-		    result = atoi(argv[1]); // atoi : string to int
-		    printf("Used port : %i\n", result);
-		    break;
-		default: // port not provided
+		case 2: 
+		result = atoi(argv[1]); 
+		printf("Port utilisé : %i\n", result);
+		break;
+		default: 
 		result = DEFAULT_PORT ;
-		printf("Unspecified port. Default port : %i\n", result);
+		printf("Port par défaut : %i\n", result);
 		break;
 	}
 	return result ;
 
 }
 
-// sets up the IP connection with address the server sockaddr_in and port the server connection port
-// Used http://man7.org/linux/man-pages/man7/ip.7.html
+// Création et mise à jour des informations de la socket
 void setupIP(struct sockaddr_in *address, int port){
 	(*address).sin_family = AF_INET;
-	(*address).sin_port = htons(port); // from host to network
-	(*address).sin_addr.s_addr = INADDR_ANY; // bind to all local interfaces
-}
+	(*address).sin_port = htons(port); 
+	(*address).sin_addr.s_addr = INADDR_ANY; 
 
 
-void bindWrapper(int serverSocketNumber, struct sockaddr_in serverAddress){
-	struct sockaddr *serverAddressAsSockaddr = (struct sockaddr *) &serverAddress ;
-	int size = sizeof(serverAddress) ;
-	if(bind(serverSocketNumber, serverAddressAsSockaddr, size) == -1){
-		printf("Bind error: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
+	void association(int serverSocketNumber, struct sockaddr_in serverAddress){
+		struct sockaddr *serverAddressAsSockaddr = (struct sockaddr *) &serverAddress ;
+		int size = sizeof(serverAddress) ;
+		if(bind(serverSocketNumber, serverAddressAsSockaddr, size) == -1){
+			printf("Erreur d'association: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 	}
-}
 
 
-void listenWrapper(int serverSocketNumber, int nbMaxWaitingConnections){
-	if(listen(serverSocketNumber, nbMaxWaitingConnections) == -1){
-		printf("Listen error: could not listen on socket %i\n", serverSocketNumber);
-		exit(EXIT_FAILURE);
+	void ecoute(int serverSocketNumber, int nbMaxWaitingConnections){
+		if(listen(serverSocketNumber, nbMaxWaitingConnections) == -1){
+			printf("Erreur d'écoute, impossible d'écouter la socket %i\n", serverSocketNumber);
+			exit(EXIT_FAILURE);
+		}
 	}
-}
 
 
-void writeUsersList(int clientSock, char *(*clientNameList)[MAX_CLIENTS], int currentlyActiveClients){
+	void writeUsersList(int clientSock, char *(*clientNameList)[MAX_CLIENTS], int clientsConnectes){
 
 	// Make sure "message" is long enough for every name to display
-	char * message = (char *)malloc (BUFSIZE * sizeof(char));
+		char * message = (char *)malloc (BUFSIZE * sizeof(char));
 
-	strcpy(message,"*****\nConnected users :\n");
-	if (currentlyActiveClients == 0){
-		strcat(message,"Nobody else connected yet\n");
-	}
-	for (int i = 0 ; i < currentlyActiveClients; i++){
-		strcat(message,(*clientNameList)[i]);
-		strcat(message,"\n");
-	}
-	strcat(message, "*****\n");
-	write(clientSock,message,strlen(message));
-}
-
-char *readWrapper(int sock){
-
-	char *message = (char *) malloc(BUFSIZE * sizeof(char));
-
-	int nbRead = read(sock, message, BUFSIZE);
-
-	if(nbRead > 0){
-		printf("Received message: %s", message);
-		return message;
-	}
-	else{
-		return NULL;
-	}
-}
-
-int searchDisconnectingID(int listSize, int *list, int socketToFind){
-	int result = 0;
-
-	while(result < listSize && list[result] != socketToFind){
-		result++;
+		strcpy(message,"\nUtilisateurs connectés :\n");
+		if (clientsConnectes == 0){
+			strcat(message,"Personne d'autre n'est en ligne\n");
+		}
+		for (int i = 0 ; i < clientsConnectes; i++){
+			strcat(message,(*clientNameList)[i]);
+			strcat(message,"\n");
+		}
+		strcat(message, "\n");
+		write(clientSock,message,strlen(message));
 	}
 
-	return result ;
-}
+	char *lecture(int sock){
 
-int getIntLength (int value){
-  int l = 1;
-  while(value > 9){
-  	l++;
-  	value /= 10;
-  }
-  return l;
-}
+		char *message = (char *) malloc(BUFSIZE * sizeof(char));
 
-int main(int argc, char **argv){
+		int nbRead = read(sock, message, BUFSIZE);
+
+		if(nbRead > 0){
+			printf("Message reçu: %s", message);
+			return message;
+		}
+		else{
+			return NULL;
+		}
+	}
+
+	int searchDisconnectingID(int listSize, int *list, int socketToFind){
+		int result = 0;
+
+		while(result < listSize && list[result] != socketToFind){
+			result++;
+		}
+
+		return result ;
+	}
+
+	int getIntLength (int value){
+		int l = 1;
+		while(value > 9){
+			l++;
+			value /= 10;
+		}
+		return l;
+	}
+
+	int main(int argc, char **argv){
 
 
-	int port ; // Listening port
-	int serverSocketNumber ; // server listening socket
+	int port ; //port d'écoute
+	int serverSocketNumber ; // socket d'écoute du serveur
 
-	struct sockaddr_in serverAddress ; // Server IP address
+	struct sockaddr_in serverAddress ; // IP du serveur
+	int nbMaxWaitingConnections = 10 ;
+	int maxClientsNumber ;
 
-	int nbMaxWaitingConnections = 10 ; // Max number of waiting connection on a listen
-	int maxClientsNumber ; // Max number of client running at the same time, depends on process file descriptor table size
-
-	fd_set clientsList, currentWorkingList; // socket lists
+	fd_set clientsList, currentWorkingList; 
 
 	socklen_t addrSize ;
-	struct sockaddr_in clientAddr ; // an IP for a connecting user
-	int clientSock;
+	struct sockaddr_in clientAddr ; // IP d'un client
+	int clientSock; // socket du client
 
 	int fd; // file descriptor (ie socket) to iterate
 
-	char * clientNameList[MAX_CLIENTS]; // name of connected user's names
-	int clientSocketList[MAX_CLIENTS]; // their corresponding socket number
+	char * clientNameList[MAX_CLIENTS]; // Noms des clients
+	int clientSocketList[MAX_CLIENTS]; // et leur socket correspondantes
 
-	int currentlyActiveClients = 0 ; // Quite obvious
+	int clientsConnectes = 0 ;
 
-	char *message; // raw received message
+	char *message;
 
-	int disconnectingID ; // Used to identify which socket just quit app (to mention it to others and close it)
+	int disconnectingID ;
 
-	int nameExists = false;
+	int doublon_pseudo = false;
 
 	int recipientSocket ;
 	int senderSocket ;
 
 	checkUsage(argc, argv);
 
-	printf("Booting server\n");
-	printf("Setting up server\n");
+	printf("Création et initialisation du serveur\n");
 
-	/* ##### SERVER SETUP ##### */
+	// Initialisation du serveur
 
 	port = setPort(argc, argv);
 
-	// create server socket, chosing an IPv4 domain and a byte stream socket => TCP
+	// Création de la socket du serveur
 	serverSocketNumber = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	// Enable local address reuse
+	// Cette option permet de réutiliser l'adresse
 	int option_value = true ;
 	setsockopt(serverSocketNumber, SOL_SOCKET, SO_REUSEADDR,(char *) &option_value, sizeof(int));
 
-	// Setup server IP
+	// Mise à jour des informations de la socket
 	setupIP(&serverAddress, port);
 
-	// Bind socket and server address
-	bindWrapper(serverSocketNumber, serverAddress);
+	// Association de la socket au port
+	association(serverSocketNumber, serverAddress);
 
-	// Start listening on server socket
-	listenWrapper(serverSocketNumber, nbMaxWaitingConnections);
+	// Début d'écoute sur la socket du serveur
+	ecoute(serverSocketNumber, nbMaxWaitingConnections);
 
-	printf("Server ready, listening on port %i\n", port);
-
-	/* ##### END SERVER SETUP ##### */
+	printf("Serveur prêt, écoute sur le port : %i\n", port);
 
 
 
-	// get descriptor table size aka max number of files open by the process => maximum number of clients
+
 	maxClientsNumber = getdtablesize();
 
-	// Empty socket list
 	FD_ZERO(&currentWorkingList);
-	// Add serverSocket to socket list
 	FD_SET(serverSocketNumber, &currentWorkingList);
 
+
+	//Gestion des clients
 	while(true) {
 
-		// first list won't move during iteration, second is dynamic in iteration
-		// it is copied here to ensure static list is up to date
+		//On copie les listes de sockets
 		memcpy(&clientsList, &currentWorkingList, sizeof(clientsList));
 
-		// listen list's sockets
+		//On lance la surveillance des descripteurs en lecture
 		if(select(maxClientsNumber, &clientsList, 0, 0, 0) == -1){
-			// EINTR just means "nothing received"
+			//On vérifie qu'on a bien reçu quelquechose
 			if(errno == EINTR) {
 				continue;
 			}
 
-			fprintf(stderr,"Select error: %s", strerror(errno));
+			fprintf(stderr,"erreur: %s", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
-		// A message on server's socket means that there is a new user requesting connection
+		// Si la requête concernée est la socket de base, c'est qu'un client veut se connecter
 		if(FD_ISSET(serverSocketNumber, &clientsList)){
-
-			// The creation of the connection is made via accept procedure
 			addrSize = sizeof clientAddr;
 			if((clientSock = accept(serverSocketNumber, ((struct sockaddr *)&clientAddr), &addrSize)) == -1){
-				fprintf(stderr, "Accept error: couldn't establish connection\n");
+				fprintf(stderr, "Impossible d'établir la connection\n");
 				exit(EXIT_FAILURE);
 			}
-			// print new client IP address
-			printf("New connection from %s \n", inet_ntoa(clientAddr.sin_addr));
+			printf("Nouvelle connection depuis %s \n", inet_ntoa(clientAddr.sin_addr));
 
-			// Add new user's socket to socket list
+			//On ajoute le client dans les sockets sous surveillance
 			FD_SET(clientSock, &currentWorkingList);
 
-			// Send a welcoming message followed by users list
-			write(clientSock, WLCM_MESSAGE, strlen(WLCM_MESSAGE) + 1);
-			writeUsersList(clientSock, &clientNameList, currentlyActiveClients);
+			//On confirme sa connection au client puis on lui donne la liste des autres connectés
+			write(clientSock, BIENVENUE, strlen(BIENVENUE) + 1);
+			writeUsersList(clientSock, &clientNameList, clientsConnectes);
 
 		}
 
-		// Every socket is inspected to get its commands ("busy waiting")
+		// On vérifie si les sockets des clients ont bougé
 		for(fd = 0; fd < maxClientsNumber ; fd++){
 			if(fd != serverSocketNumber && FD_ISSET(fd, &clientsList)){
 
-				message = readWrapper(fd) ;
-				// From that point, 4 possibilities :
-				// 1) the user deconnects itself
-				// 2) the user asks for a name (durin its connection)
-				// 3) the user asks for the list of connected users
-				// 4) the user asks to send a message to someone
-				// There is no other case to deal with as only correct command are transmitted to the server
-
-				// Case 1)
+				message = lecture(fd) ;
+				//Si un client déconnecte
 				if(message == NULL){
 
-					disconnectingID = searchDisconnectingID(currentlyActiveClients, clientSocketList, fd);
-
-					// If disconnectingID is active (ie it has a name) must remove said name
-					if (disconnectingID < currentlyActiveClients){
-						printf("User disconnected : %s\n", clientNameList[disconnectingID]);
-						// Removing from clientSocketList and clientNameList (by left shifting rest of arrays)
-						while(disconnectingID < currentlyActiveClients - 1){
+					disconnectingID = searchDisconnectingID(clientsConnectes, clientSocketList, fd);
+					if (disconnectingID < clientsConnectes){
+						printf("utilisateur déconnecté : %s\n", clientNameList[disconnectingID]);
+						while(disconnectingID < clientsConnectes - 1){
 							clientSocketList[disconnectingID] = clientSocketList[disconnectingID + 1];
 							clientNameList[disconnectingID] = clientNameList[disconnectingID + 1];
 							disconnectingID++;
 						}
-						currentlyActiveClients--;
+						clientsConnectes--;
 					}
 
-					// Remove current socket from list and close it
+					//On clôt la socket correspondante
 					FD_CLR(fd, &currentWorkingList);
 					close(fd);
 				}
 				else{
 
-					// Case 2)
-					if (strncmp(message, NAME, strlen(NAME)) == 0){
-						char * wantedName = message + strlen(NAME) ; // get wanted name by removing "[name]"
-						printf("\nChecking name availability of %s ", wantedName);
+					// On ajouteun client
+					if (strncmp(message, PSEUDO, strlen(PSEUDO)) == 0){
+						char * wantedName = message + strlen(PSEUDO) ; // get wanted name by removing "[name]"
+						printf("\nVérification de la disponibilité du pseudo %s ", wantedName);
 
-						nameExists = false;
-						for(int i = 0 ; i < currentlyActiveClients ; i++){
+						doublon_pseudo = false;
+						//On vérifie que le pseudo n'est pas déjà utilisé
+						for(int i = 0 ; i < clientsConnectes ; i++){
 							if (strlen(wantedName) == strlen(clientNameList[i])){
 								if(strncmp(wantedName, clientNameList[i], strlen(wantedName)) == 0){
 									printf("✘\n");
-									write(fd, USERNAMETAKEN, strlen(USERNAMETAKEN) + 1);
-									nameExists = true;
+									write(fd, PSEUDOPRIS, strlen(PSEUDOPRIS) + 1);
+									doublon_pseudo = true;
 									break;
 								}
 							}
 						}
 						printf("\n");
 
-						// Add user's name to user's names list and its socket to sockets list
-						if(nameExists == false){
-							clientNameList[currentlyActiveClients]= (char *) malloc(BUFSIZE * sizeof(char));
-							strncat(clientNameList[currentlyActiveClients], wantedName,strlen(wantedName));
-							clientSocketList[currentlyActiveClients] = (long int) malloc(sizeof(int)); // Why does it asks for a LONG int ?
-							clientSocketList[currentlyActiveClients] = clientSock;
-							currentlyActiveClients++;
+						//Si le pseudo est libre
+						if(doublon_pseudo == false){
+							clientNameList[clientsConnectes]= (char *) malloc(BUFSIZE * sizeof(char));
+							strncat(clientNameList[clientsConnectes], wantedName,strlen(wantedName));
+							clientSocketList[clientsConnectes] = (long int) malloc(sizeof(int)); // Why does it asks for a LONG int ?
+							clientSocketList[clientsConnectes] = clientSock;
+							clientsConnectes++;
 						}
 					}
 
-					// Case 3)
-					else if (strncmp(message,LIST,strlen(LIST)) == 0){
-
-						// Segmentation fault if use of writeUsersList here. Why ? (valgrind makes me think wrong parameters passing)
-						// same with futur code needing to pass clientNameList or clientSocketList as parameters
-
-
-						message = (char *)malloc (currentlyActiveClients * BUFSIZE * sizeof(char));
-
-						strcpy(message,"*****\nConnected users :\n");
-						if (currentlyActiveClients == 1) {
-							strcat(message,"Nobody else connected yet\n");
+					//Affichage de la liste des connectés
+					else if (strncmp(message,LISTE,strlen(LISTE)) == 0){
+						message = (char *)malloc (clientsConnectes * BUFSIZE * sizeof(char));
+						strcpy(message,"\nUtilisateurs connectés :\n");
+						if (clientsConnectes == 1) {
+							strcat(message,"Personne d'autre n'est en ligne\n");
 						} else {
-							for (int i = 0 ; i < currentlyActiveClients ; i++){
+							for (int i = 0 ; i < clientsConnectes ; i++){
 								// Add every other user name to "message"
 								if(clientSocketList[i]!=fd){
 									strcat(message,clientNameList[i]);
@@ -313,55 +288,45 @@ int main(int argc, char **argv){
 							}
 
 						}
-						strcat(message, "*****\n");
-						// Send "message" (usernames list) to requesting user
+						strcat(message, "\n");
 						write(fd,message,strlen(message));
 					}
 
-					// Case 4)
+					//Envoie des messagees
 					else if (strncmp(message, MSGTAG, strlen(MSGTAG)) == 0){
 
-						// message = MSGTAG<username length + 1>␣<username>␣<message>
-
-						// Get name length
 						char *lengthChar = (char *) malloc(BUFSIZE * sizeof(char));
 						strncpy(lengthChar, message + strlen(MSGTAG), BUFSIZE);
 						int recipientNameLength = atoi(lengthChar);
-						int nbDigitsrecipientNameLength = getIntLength(recipientNameLength + 1);// + 1 because client sends username length + 1
-
-						// Get recipient name
-						// put it in recipientName, from message, starting at `strlen(MSGTAG)+nbDigitsrecipientNameLength+1`-th char of message and with a length of recipientNameLength
+						int nbDigitsrecipientNameLength = getIntLength(recipientNameLength + 1);1`-th char of message and with a length of recipientNameLength
 						char *recipientName = (char *) malloc(BUFSIZE * sizeof(char));
 						strncpy(recipientName, message + strlen(MSGTAG) + nbDigitsrecipientNameLength + 1, recipientNameLength);
 
-						// Get message
 						char *messageBody= (char *) malloc(BUFSIZE * sizeof(char));
-						// message starts at `strlen(MSGTAG) + nbDigitsrecipientNameLength + 1 + recipientNameLength + 1`-th char
 						int nbCharToIgnore = strlen(MSGTAG) + nbDigitsrecipientNameLength + 1 + recipientNameLength + 1;
 						strncpy(messageBody, message + nbCharToIgnore, strlen(message) - nbCharToIgnore);
 
-
-						// get recipient socket number
+						//Recherche de la socket liée
 						recipientSocket = 0;
-						while(recipientSocket < currentlyActiveClients && strcmp(clientNameList[recipientSocket],recipientName) != 0){
+						while(recipientSocket < clientsConnectes && strcmp(clientNameList[recipientSocket],recipientName) != 0){
 							recipientSocket++;
 						}
 
-						if(recipientSocket < currentlyActiveClients){
-							//get sender socket number
+						if(recipientSocket < clientsConnectes){
+							//Recherche de l'émetteur
 							senderSocket = 0;
-							while(senderSocket < currentlyActiveClients && clientSocketList[senderSocket] != fd){
+							while(senderSocket < clientsConnectes && clientSocketList[senderSocket] != fd){
 								senderSocket++;
 							}
 							strcpy(message,clientNameList[senderSocket]);
 							strcat(message, "> ");
 							strcat(message, messageBody);
 							write(clientSocketList[recipientSocket], message, strlen(message));
-							printf("Message sent\n");
+							printf("Message envoyé\n");
 						}
 						else{
 							strcpy(message, recipientName);
-							strcat(message, " doesn't exist on server\n");
+							strcat(message, "N'existe pas sur le serveur\n");
 							write(fd, message, strlen(message));
 						}
 					}
