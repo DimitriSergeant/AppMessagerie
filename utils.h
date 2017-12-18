@@ -18,13 +18,14 @@ typedef int bool;
 #define false 0
 
 #define BUFSIZE 1024
-#define DEFAULT_PORT 12345
+#define PSEUDOSIZE 50
+#define DEFAULT_PORT 1111
 #define MAXCONN 5
 #define MAX_CLIENTS 10
 
-#define Bienvenue "Connection au serveur\n"
+#define BIENVENUE "Connection au serveur\n"
 
-#define LIST "list"
+#define LISTE "liste"
 
 #define PSEUDO "[pseudo]"
 
@@ -32,4 +33,4 @@ typedef int bool;
 
 #define ENVOI "envoi "
 
-#define USERNAMETAKEN "[UsernameTaken]"
+#define PSEUDOPRIS "[PseudoPris]"

@@ -1,19 +1,12 @@
-# Makefile
+EXEC=client serveur
 
-EXEC = client serveur
-all: ${EXEC}
+all:$(EXEC)
 
-client.o : client.c
-	gcc -c client.c -g
+client : client.c
+	gcc -g client.c -o client -Wall
 
-serveur.o : serveur.c
-	gcc -c serveur.c -g
-
-client: client.c
-	gcc -o client client.c
-
-serveur: serveur.c
-	gcc -o serveur serveur.c
+serveur : serveur.c
+	gcc -g serveur.c -o serveur -Wall
 
 clean:
-	rm -vf ${EXEC} *.o
+	rm $(EXEC)
