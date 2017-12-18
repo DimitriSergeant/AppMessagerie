@@ -1,3 +1,16 @@
+
+/******************************************************************************/
+/*							Application: Messagerie	multi-utilisateurs										*/
+/******************************************************************************/
+/*									      																										*/
+/*			 									programme  SERVEUR			      											*/
+/*									      																										*/
+/******************************************************************************/
+/*									      																										*/
+/*		Auteurs : Dimitri SERGEANT , Léo VALETTE											 					*/
+/*									      																										*/
+/******************************************************************************/
+
 #include "utils.h"
 
 
@@ -18,7 +31,7 @@ int setPort(int argc, char **argv){
 		    result = atoi(argv[1]); // atoi : string to int
 		    printf("Used port : %i\n", result);
 		    break;
-		default: // port not provided  
+		default: // port not provided
 		result = DEFAULT_PORT ;
 		printf("Unspecified port. Default port : %i\n", result);
 		break;
@@ -31,7 +44,7 @@ int setPort(int argc, char **argv){
 // Used http://man7.org/linux/man-pages/man7/ip.7.html
 void setupIP(struct sockaddr_in *address, int port){
 	(*address).sin_family = AF_INET;
-	(*address).sin_port = htons(port); // from host to network 
+	(*address).sin_port = htons(port); // from host to network
 	(*address).sin_addr.s_addr = INADDR_ANY; // bind to all local interfaces
 }
 
@@ -40,7 +53,7 @@ void bindWrapper(int serverSocketNumber, struct sockaddr_in serverAddress){
 	struct sockaddr *serverAddressAsSockaddr = (struct sockaddr *) &serverAddress ;
 	int size = sizeof(serverAddress) ;
 	if(bind(serverSocketNumber, serverAddressAsSockaddr, size) == -1){
-		printf("Bind error: %s\n", strerror(errno)); 
+		printf("Bind error: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 }
@@ -56,7 +69,7 @@ void listenWrapper(int serverSocketNumber, int nbMaxWaitingConnections){
 
 void writeUsersList(int clientSock, char *(*clientNameList)[MAX_CLIENTS], int currentlyActiveClients){
 
-	// Make sure "message" is long enough for every name to display	 
+	// Make sure "message" is long enough for every name to display
 	char * message = (char *)malloc (BUFSIZE * sizeof(char));
 
 	strcpy(message,"*****\nConnected users :\n");
@@ -68,13 +81,13 @@ void writeUsersList(int clientSock, char *(*clientNameList)[MAX_CLIENTS], int cu
 		strcat(message,"\n");
 	}
 	strcat(message, "*****\n");
-	write(clientSock,message,strlen(message));	
+	write(clientSock,message,strlen(message));
 }
 
 char *readWrapper(int sock){
 
 	char *message = (char *) malloc(BUFSIZE * sizeof(char));
-	
+
 	int nbRead = read(sock, message, BUFSIZE);
 
 	if(nbRead > 0){
@@ -98,16 +111,16 @@ int searchDisconnectingID(int listSize, int *list, int socketToFind){
 
 int getIntLength (int value){
   int l = 1;
-  while(value > 9){ 
-  	l++; 
-  	value /= 10; 
+  while(value > 9){
+  	l++;
+  	value /= 10;
   }
   return l;
 }
 
 int main(int argc, char **argv){
-  
-	
+
+
 	int port ; // Listening port
 	int serverSocketNumber ; // server listening socket
 
@@ -115,11 +128,11 @@ int main(int argc, char **argv){
 
 	int nbMaxWaitingConnections = 10 ; // Max number of waiting connection on a listen
 	int maxClientsNumber ; // Max number of client running at the same time, depends on process file descriptor table size
-	
+
 	fd_set clientsList, currentWorkingList; // socket lists
 
-	socklen_t addrSize ; 
-	struct sockaddr_in clientAddr ; // an IP for a connecting user 
+	socklen_t addrSize ;
+	struct sockaddr_in clientAddr ; // an IP for a connecting user
 	int clientSock;
 
 	int fd; // file descriptor (ie socket) to iterate
@@ -128,26 +141,26 @@ int main(int argc, char **argv){
 	int clientSocketList[MAX_CLIENTS]; // their corresponding socket number
 
 	int currentlyActiveClients = 0 ; // Quite obvious
-	
-	char *message; // raw received message
-	
-	int disconnectingID ; // Used to identify which socket just quit app (to mention it to others and close it)
-	
-	int nameExists = false;  
 
-	int recipientSocket ; 
+	char *message; // raw received message
+
+	int disconnectingID ; // Used to identify which socket just quit app (to mention it to others and close it)
+
+	int nameExists = false;
+
+	int recipientSocket ;
 	int senderSocket ;
 
 	checkUsage(argc, argv);
 
-	printf("Booting server\n");  
-	printf("Setting up server\n"); 
+	printf("Booting server\n");
+	printf("Setting up server\n");
 
-	/* ##### SERVER SETUP ##### */ 
+	/* ##### SERVER SETUP ##### */
 
 	port = setPort(argc, argv);
 
-	// create server socket, chosing an IPv4 domain and a byte stream socket => TCP 
+	// create server socket, chosing an IPv4 domain and a byte stream socket => TCP
 	serverSocketNumber = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 	// Enable local address reuse
@@ -163,7 +176,7 @@ int main(int argc, char **argv){
 	// Start listening on server socket
 	listenWrapper(serverSocketNumber, nbMaxWaitingConnections);
 
-	printf("Server ready, listening on port %i\n", port); 
+	printf("Server ready, listening on port %i\n", port);
 
 	/* ##### END SERVER SETUP ##### */
 
@@ -178,8 +191,8 @@ int main(int argc, char **argv){
 	FD_SET(serverSocketNumber, &currentWorkingList);
 
 	while(true) {
-		
-		// first list won't move during iteration, second is dynamic in iteration 
+
+		// first list won't move during iteration, second is dynamic in iteration
 		// it is copied here to ensure static list is up to date
 		memcpy(&clientsList, &currentWorkingList, sizeof(clientsList));
 
@@ -196,7 +209,7 @@ int main(int argc, char **argv){
 
 		// A message on server's socket means that there is a new user requesting connection
 		if(FD_ISSET(serverSocketNumber, &clientsList)){
-			
+
 			// The creation of the connection is made via accept procedure
 			addrSize = sizeof clientAddr;
 			if((clientSock = accept(serverSocketNumber, ((struct sockaddr *)&clientAddr), &addrSize)) == -1){
@@ -220,7 +233,7 @@ int main(int argc, char **argv){
 			if(fd != serverSocketNumber && FD_ISSET(fd, &clientsList)){
 
 				message = readWrapper(fd) ;
-				// From that point, 4 possibilities : 
+				// From that point, 4 possibilities :
 				// 1) the user deconnects itself
 				// 2) the user asks for a name (durin its connection)
 				// 3) the user asks for the list of connected users
@@ -229,7 +242,7 @@ int main(int argc, char **argv){
 
 				// Case 1)
 				if(message == NULL){
-					
+
 					disconnectingID = searchDisconnectingID(currentlyActiveClients, clientSocketList, fd);
 
 					// If disconnectingID is active (ie it has a name) must remove said name
@@ -243,23 +256,23 @@ int main(int argc, char **argv){
 						}
 						currentlyActiveClients--;
 					}
-					
+
 					// Remove current socket from list and close it
 					FD_CLR(fd, &currentWorkingList);
 					close(fd);
 				}
-				else{ 
-					
-					// Case 2)
-					if (strncmp(message, NAME, strlen(NAME)) == 0){ 
-						char * wantedName = message + strlen(NAME) ; // get wanted name by removing "[name]"
-						printf("\nChecking name availability of %s ", wantedName); 
+				else{
 
-						nameExists = false;						
+					// Case 2)
+					if (strncmp(message, NAME, strlen(NAME)) == 0){
+						char * wantedName = message + strlen(NAME) ; // get wanted name by removing "[name]"
+						printf("\nChecking name availability of %s ", wantedName);
+
+						nameExists = false;
 						for(int i = 0 ; i < currentlyActiveClients ; i++){
 							if (strlen(wantedName) == strlen(clientNameList[i])){
 								if(strncmp(wantedName, clientNameList[i], strlen(wantedName)) == 0){
-									printf("✘\n");										
+									printf("✘\n");
 									write(fd, USERNAMETAKEN, strlen(USERNAMETAKEN) + 1);
 									nameExists = true;
 									break;
@@ -277,7 +290,7 @@ int main(int argc, char **argv){
 							currentlyActiveClients++;
 						}
 					}
-					
+
 					// Case 3)
 					else if (strncmp(message,LIST,strlen(LIST)) == 0){
 
@@ -292,7 +305,7 @@ int main(int argc, char **argv){
 							strcat(message,"Nobody else connected yet\n");
 						} else {
 							for (int i = 0 ; i < currentlyActiveClients ; i++){
-								// Add every other user name to "message" 
+								// Add every other user name to "message"
 								if(clientSocketList[i]!=fd){
 									strcat(message,clientNameList[i]);
 									strcat(message,"\n");
@@ -307,16 +320,16 @@ int main(int argc, char **argv){
 
 					// Case 4)
 					else if (strncmp(message, MSGTAG, strlen(MSGTAG)) == 0){
-						
+
 						// message = MSGTAG<username length + 1>␣<username>␣<message>
 
-						// Get name length 
+						// Get name length
 						char *lengthChar = (char *) malloc(BUFSIZE * sizeof(char));
 						strncpy(lengthChar, message + strlen(MSGTAG), BUFSIZE);
 						int recipientNameLength = atoi(lengthChar);
 						int nbDigitsrecipientNameLength = getIntLength(recipientNameLength + 1);// + 1 because client sends username length + 1
 
-						// Get recipient name 
+						// Get recipient name
 						// put it in recipientName, from message, starting at `strlen(MSGTAG)+nbDigitsrecipientNameLength+1`-th char of message and with a length of recipientNameLength
 						char *recipientName = (char *) malloc(BUFSIZE * sizeof(char));
 						strncpy(recipientName, message + strlen(MSGTAG) + nbDigitsrecipientNameLength + 1, recipientNameLength);
@@ -327,7 +340,7 @@ int main(int argc, char **argv){
 						int nbCharToIgnore = strlen(MSGTAG) + nbDigitsrecipientNameLength + 1 + recipientNameLength + 1;
 						strncpy(messageBody, message + nbCharToIgnore, strlen(message) - nbCharToIgnore);
 
-						
+
 						// get recipient socket number
 						recipientSocket = 0;
 						while(recipientSocket < currentlyActiveClients && strcmp(clientNameList[recipientSocket],recipientName) != 0){
@@ -352,9 +365,8 @@ int main(int argc, char **argv){
 							write(fd, message, strlen(message));
 						}
 					}
-				}	
+				}
 			}
 		}
 	}
 }
-
