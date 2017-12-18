@@ -1,104 +1,100 @@
 #include "utils.h"
 
-#define NEED_NEW_NAME 1
+#define NOUVEAU_PSEUDO 1
 #define DEFAULT_STATE 0
 
 #define QUIT "quit"
 
 void checkUsage(int argc, char **argv) {
 	if (argc != 4) {
-		printf("%s <server> <port> <pseudo> \n", argv[0]);
+		printf("%s <serveur> <port> <pseudo> \n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 }
 
-void setpseudo(char **argv, char *pseudo) {
+void setPseudo(char **argv, char *pseudo) {
 	strcpy(pseudo, argv[3]);
 }
 
-void setServerPort(char **argv, int* port) {
+void setPortServeur(char **argv, int* port) {
 	*port = atoi(argv[2]);
 }
 
-void setServerAdressString(char **argv, char *serverAdressString) {
+void setServeurAdressString(char **argv, char *serverAdressString) {
 	strcpy(serverAdressString, argv[1]);
 }
 
-int initSocket(struct sockaddr_in ipAddress, int port, char* serverIP) {
-	int idSocket;
+int initSocket(struct sockaddr_in sin_serveur, int port, char* IPServeur) {
+	int num_socket;
 	int connectReturn;
 
 	// AF_INET -> use of IPv4
-	ipAddress.sin_family = AF_INET;
+	sin_serveur.sin_family = AF_INET;
 	// Converts integer port into "real usable" port
-	ipAddress.sin_port = htons(port);
+	sin_serveur.sin_port = htons(port);
 	// Converts IPv4 number-dot to a "real usable" address
-	ipAddress.sin_addr.s_addr = inet_addr(serverIP);
+	sin_serveur.sin_addr.s_addr = inet_addr(IPServeur);
 
 	// Create the socket : using IPv4, TCP (byte stream socket and 0)
-	idSocket = socket(AF_INET, SOCK_STREAM, 0);
+	num_socket = socket(AF_INET, SOCK_STREAM, 0);
 
 	// check the format of the given adress
-	if (ipAddress.sin_addr.s_addr == -1) {
-		printf("Socket error\n");
+	if (sin_serveur.sin_addr.s_addr == -1) {
+		printf("Erreur Socket\n");
 		exit(EXIT_FAILURE);
 	} else {
 		// Connection to the server
-		// idSocket -> the id of the socket previously created
-		// ipAddress -> pointer to an sockaddr struct which contains port and Id of the remote socket
-		// sizeof(ipAddress) -> size of the struct
-		struct sockaddr *ipAddressAsSockaddr = (struct sockaddr *) &ipAddress ;
-		connectReturn = connect(idSocket, ipAddressAsSockaddr, sizeof(ipAddress) );
+		// num_socket -> the id of the socket previously created
+		// sin_serveur -> pointer to an sockaddr struct which contains port and Id of the remote socket
+		// sizeof(sin_serveur) -> size of the struct
+		struct sockaddr *sin = (struct sockaddr *) &sin_serveur ;
+		connectReturn = connect(num_socket, sin, sizeof(sin_serveur) );
 		printf("connectReturn = %i\n", connectReturn);
 	}
-
 	// Check if connection succeded
 	if (connectReturn != 0) {
-		printf("Remote service unreachable on server %s\n ", serverIP);
+		printf("Impossible d'acceder au serveur %s depuis le port %d\n ", IPServeur, port);
 		exit(EXIT_FAILURE);
 	}
-
 	//return the Id of the socket created
-	return idSocket;
+	return num_socket;
 }
 
-void sendName(char* message, char* name, int idSocket) {
+void envoiPseudo(char* message, char* pseudo, int num_socket) {
 
-	// send NAME flag +requested name to server
-	strcpy(message, NAME);
-	strcat(message, name);
-	write(idSocket, message, strlen(message) + 1);
+	// send NAME flag +requested pseudo to server
+	strcpy(message, NOM);
+	strcat(message, pseudo);
+	write(num_socket, message, strlen(message) + 1);
 
 	// Receive and print server's welcome message
-	read(idSocket, message, strlen(WLCM_MESSAGE) + 1);
+	read(num_socket, message, strlen(WLCM_MESSAGE) + 1);
 	printf("%s", message);
 }
 
 
 
-void doUserAction(char* message, char* buf, char* name, int idSocket, int *sendInProgress) {
-
-
+void ActionUtilisateur(char* message, char* buf, char* pseudo, int num_socket, int *sendInProgress) {
 	// If the user is sending a message
 	if (*sendInProgress) {
 		strcat(message, buf);
-		write(idSocket, message, strlen(message) + 1);
+		write(num_socket, message, strlen(message) + 1);
 		fflush(stdout);
 		*sendInProgress = false;
 	}
 	// If the user asked from a disconnection
 	else if (strncmp(buf, QUIT, strlen(QUIT)) == 0) {
 		// Send info to server
-		sprintf(buf, "Disconnection asked by %s\n", name);
-		write(idSocket, buf, strlen(buf) + 1);
+		sprintf(buf, "Déconnexion de %s\n", pseudo);
+		write(num_socket, buf, strlen(buf) + 1);
 		// Close socket and end application
-		close(idSocket);
+		close(num_socket);
 		exit(EXIT_SUCCESS);
 	}
 	// If the user asked for the list of connected users
 	else if (strncmp(buf, LIST, strlen(LIST)) == 0) {
 		// Send this flag to server
-		write(idSocket, buf, strlen(buf) + 1);
+		write(num_socket, buf, strlen(buf) + 1);
 	}
 	// If the user wants to send a message
 	else if (strncmp(buf, SENDTO, strlen(SENDTO)) == 0) {
@@ -116,7 +112,7 @@ void doUserAction(char* message, char* buf, char* name, int idSocket, int *sendI
 	}
 }
 
-void askNewName(char* message, char* buf, int idSocket, int* nameState) {
+void askNewpseudo(char* message, char* buf, int num_socket, int* pseudoState) {
 
 	// set the end of string ('\0') to first '\n' encountered (to remove it -and anything below- from buf)
 	char *p = strchr(buf, '\n');
@@ -124,17 +120,17 @@ void askNewName(char* message, char* buf, int idSocket, int* nameState) {
 		*p = '\0';
 	}
 
-	// send NAME flag + new requested name to server
+	// send NAME flag + new requested pseudo to server
 	strcpy(message, NAME);
 	strcat(message, buf);
-	write(idSocket, message, strlen(message) + 1);
+	write(num_socket, message, strlen(message) + 1);
 
-	// set state to not new name requesting, server'll change that if needed
-	*nameState = DEFAULT_STATE;
+	// set state to not new pseudo requesting, server'll change that if needed
+	*pseudoState = DEFAULT_STATE;
 }
 
 
-void readReceivedMessage(char *buf, int socket, int *nameState) {
+void readReceivedMessage(char *buf, int socket, int *pseudoState) {
 
 	int readResult;
 	readResult = read(socket, buf, BUFSIZE);
@@ -157,8 +153,8 @@ void readReceivedMessage(char *buf, int socket, int *nameState) {
 			if (strncmp(buf, pseudoTAKEN, strlen(pseudoTAKEN)) == 0) {
 				printf("pseudo already taken\n");
 				printf("Please select another one :\n");
-				// Change unsernameState to avoid the send of new message
-				*nameState = NEED_NEW_NAME;
+				// Change unserpseudoState to avoid the send of new message
+				*pseudoState = NOUVEAU_PSEUDO;
 				fflush(stdout);
 			} else {
 				// Display server message
@@ -176,13 +172,13 @@ int main( int argc, char**argv ) {
 	char *pseudo = (char *) malloc(BUFSIZE * sizeof(char)); // quite obvious
 	char *serverAdressString = (char *) malloc(BUFSIZE * sizeof(char)); // server IP entered by user ("127.0.0.1" for example)
 	int serverPort ;
-	int idSocket ; // own socket number
+	int num_socket ; // own socket number
 	char * message = (char *) malloc (BUFSIZE * sizeof(char)); // buffer used to send messages to server
 	int maxClientsNumber;
 	fd_set socketList, currentWorkingList ; // socket lists (see further for explanation of need of 2 lists)
-	int unsernameState = DEFAULT_STATE ;
+	int unserpseudoState = DEFAULT_STATE ;
 	bool sendInProgress = false ; // whether the user is currently sending a message to server or not
-	struct sockaddr_in ipAddress;
+	struct sockaddr_in sin_serveur;
 
 
 	char *buf = (char *)malloc(BUFSIZE * sizeof(char));
@@ -193,19 +189,19 @@ int main( int argc, char**argv ) {
 
 	checkUsage(argc, argv);
 
-	setpseudo(argv, pseudo);
+	setPseudo(argv, pseudo);
 
-	setServerAdressString(argv, serverAdressString);
-	setServerPort(argv, &serverPort);
+	setServeurAdressString(argv, serverAdressString);
+	setPortServeur(argv, &serverPort);
 
 	printf("Application ready\n");
 	printf("Connection to server on adress %s and port %d\n", serverAdressString, serverPort);
 
 	// Setup socket's information (adress, destination port and socket type)
-	idSocket = initSocket(ipAddress, serverPort, serverAdressString);
+	num_socket = initSocket(sin_serveur, serverPort, serverAdressString);
 
 	// Send pseudo and hence receive welcome message
-	sendName(message, pseudo, idSocket);
+	envoiPseudo(message, pseudo, num_socket);
 
 	// get descriptor table size aka max number of files open by the process => maximum number of clients
 	maxClientsNumber = getdtablesize();
@@ -217,7 +213,7 @@ int main( int argc, char**argv ) {
 	FD_SET(0, &socketList);
 
 	// Add the socket with to the socket list
-	FD_SET(idSocket, &socketList);
+	FD_SET(num_socket, &socketList);
 
 	while (true) {
 
@@ -244,21 +240,21 @@ int main( int argc, char**argv ) {
 			buf = fgets(buf, BUFSIZE, stdin);
 
 			//If the user chose an available name
-			if (unsernameState != NEED_NEW_NAME) {
+			if (unsernameState != NOUVEAU_PSEUDO) {
 				// parse user instruction to decide what to do and do it
-				doUserAction(message, buf, pseudo, idSocket, &sendInProgress);
+				ActionUtilisateur(message, buf, pseudo, num_socket, &sendInProgress);
 			} else {
 				// Ask server if "buf" is an available name
-				askNewName(message, buf, idSocket, &unsernameState);
+				askNewName(message, buf, num_socket, &unsernameState);
 			}
 		}
 		// If something was received from server
-		if (FD_ISSET(idSocket, &currentWorkingList)) {
+		if (FD_ISSET(num_socket, &currentWorkingList)) {
 			// parse received message and decide what to do
 			// updates buf
-			readReceivedMessage(buf, idSocket, &unsernameState);
+			readReceivedMessage(buf, num_socket, &unsernameState);
 		}
 	}
-	close(idSocket);
+	close(num_socket);
 	return 0;
 }
