@@ -7,13 +7,13 @@
 
 void checkUsage(int argc, char **argv) {
 	if (argc != 4) {
-		printf("%s <server> <port> <username> \n", argv[0]);
+		printf("%s <server> <port> <pseudo> \n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 }
 
-void setUsername(char **argv, char *username) {
-	strcpy(username, argv[3]);
+void setpseudo(char **argv, char *pseudo) {
+	strcpy(pseudo, argv[3]);
 }
 
 void setServerPort(char **argv, int* port) {
@@ -30,10 +30,8 @@ int initSocket(struct sockaddr_in ipAddress, int port, char* serverIP) {
 
 	// AF_INET -> use of IPv4
 	ipAddress.sin_family = AF_INET;
-
 	// Converts integer port into "real usable" port
 	ipAddress.sin_port = htons(port);
-
 	// Converts IPv4 number-dot to a "real usable" address
 	ipAddress.sin_addr.s_addr = inet_addr(serverIP);
 
@@ -104,14 +102,14 @@ void doUserAction(char* message, char* buf, char* name, int idSocket, int *sendI
 	}
 	// If the user wants to send a message
 	else if (strncmp(buf, SENDTO, strlen(SENDTO)) == 0) {
-		char *recipientUsernameLength = (char *) malloc(sizeof(char)) ;
-		char *recipientUsername = (char *) malloc(strlen(buf) - strlen(SENDTO));
-		strncpy(recipientUsername, buf + strlen(SENDTO), strlen(buf) - strlen(SENDTO));
+		char *recipientpseudoLength = (char *) malloc(sizeof(char)) ;
+		char *recipientpseudo = (char *) malloc(strlen(buf) - strlen(SENDTO));
+		strncpy(recipientpseudo, buf + strlen(SENDTO), strlen(buf) - strlen(SENDTO));
 		strcpy(message, MSGTAG);
-		sprintf(recipientUsernameLength, "%lu", strlen(recipientUsername) - 1);
+		sprintf(recipientpseudoLength, "%lu", strlen(recipientpseudo) - 1);
 
-		strcat(message, recipientUsernameLength); strcat(message, " ");
-		strncat(message, recipientUsername, strlen(recipientUsername) - 1); strcat(message, " ");
+		strcat(message, recipientpseudoLength); strcat(message, " ");
+		strncat(message, recipientpseudo, strlen(recipientpseudo) - 1); strcat(message, " ");
 
 		*sendInProgress = true;
 		printf("Message : "); fflush(stdout);
@@ -155,9 +153,9 @@ void readReceivedMessage(char *buf, int socket, int *nameState) {
 			close (socket);
 			exit(EXIT_FAILURE);
 		} else {
-			// If the server tells the user his username is already taken
-			if (strncmp(buf, USERNAMETAKEN, strlen(USERNAMETAKEN)) == 0) {
-				printf("Username already taken\n");
+			// If the server tells the user his pseudo is already taken
+			if (strncmp(buf, pseudoTAKEN, strlen(pseudoTAKEN)) == 0) {
+				printf("pseudo already taken\n");
 				printf("Please select another one :\n");
 				// Change unsernameState to avoid the send of new message
 				*nameState = NEED_NEW_NAME;
@@ -175,7 +173,7 @@ void readReceivedMessage(char *buf, int socket, int *nameState) {
 
 int main( int argc, char**argv ) {
 
-	char *username = (char *) malloc(BUFSIZE * sizeof(char)); // quite obvious
+	char *pseudo = (char *) malloc(BUFSIZE * sizeof(char)); // quite obvious
 	char *serverAdressString = (char *) malloc(BUFSIZE * sizeof(char)); // server IP entered by user ("127.0.0.1" for example)
 	int serverPort ;
 	int idSocket ; // own socket number
@@ -195,7 +193,7 @@ int main( int argc, char**argv ) {
 
 	checkUsage(argc, argv);
 
-	setUsername(argv, username);
+	setpseudo(argv, pseudo);
 
 	setServerAdressString(argv, serverAdressString);
 	setServerPort(argv, &serverPort);
@@ -206,8 +204,8 @@ int main( int argc, char**argv ) {
 	// Setup socket's information (adress, destination port and socket type)
 	idSocket = initSocket(ipAddress, serverPort, serverAdressString);
 
-	// Send username and hence receive welcome message
-	sendName(message, username, idSocket);
+	// Send pseudo and hence receive welcome message
+	sendName(message, pseudo, idSocket);
 
 	// get descriptor table size aka max number of files open by the process => maximum number of clients
 	maxClientsNumber = getdtablesize();
@@ -248,7 +246,7 @@ int main( int argc, char**argv ) {
 			//If the user chose an available name
 			if (unsernameState != NEED_NEW_NAME) {
 				// parse user instruction to decide what to do and do it
-				doUserAction(message, buf, username, idSocket, &sendInProgress);
+				doUserAction(message, buf, pseudo, idSocket, &sendInProgress);
 			} else {
 				// Ask server if "buf" is an available name
 				askNewName(message, buf, idSocket, &unsernameState);
@@ -264,5 +262,3 @@ int main( int argc, char**argv ) {
 	close(idSocket);
 	return 0;
 }
-
-
